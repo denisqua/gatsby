@@ -1,7 +1,9 @@
 files:
   - source: /docs/
     ignore:
-      - /docs/contributing/images
+      - /docs/contributing
       - /docs/docs/images
       - /docs/features
+      - /docs/creators
+      - /docs/blog
     translation: /translation/%two_letters_code%.%file_extension%
