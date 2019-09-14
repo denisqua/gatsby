@@ -1,106 +1,195 @@
 ---
-title: Sourcing from WordPress
+title: GraphQL Node Types Creation
 ---
 
-This guide will walk you through the process of using [Gatsby](/) with [WordPress Rest Api](https://developer.wordpress.org/rest-api/reference/).
+> This documentation isn't up to date with latest [schema customization changes](/docs/schema-customization). Help Gatsby by making a PR to [update this documentation](https://github.com/gatsbyjs/gatsby/issues/14228)!
 
-WordPress is a free and open-source content management system (CMS). Let's say you have a site built with WordPress and you want to pull the existing data into your static Gatsby site. You can do that with [gatsby-source-wordpress](/packages/gatsby-source-wordpress/?=wordpress). Let's begin!
+Gatsby creates a [GraphQLObjectType](https://graphql.org/graphql-js/type/#graphqlobjecttype) for each distinct `node.internal.type` that is created during the source-nodes phase. Find out below how this is done.
 
-*Note: this guide uses the `gatsby-starter-default` to provide you with the knowledge necessary to start working with WordPress but if you get stuck at some point of the guide feel free to use [this example](https://github.com/gatsbyjs/gatsby/tree/master/examples/using-wordpress) to gain extra insights.*
+## GraphQL Types for each type of node
 
-## Setup
+When running a GraphQL query, there are a variety of fields that you will want to query. Let's take an example, say we have the below query:
 
-### Quick start
+```graphql
+{
+  file( relativePath: {  eq: `blogs/my-blog.md` } ) {
+    childMarkdownRemark {
+      frontmatter: {
+        title
+      }
+    }
+  }
+}
+```
 
-This guide assumes that you have a Gatsby project set up. If you need to set up a project, head to the [Quick Start guide](/docs/quick-start), then come back.
+When GraphQL runs, it will query all `file` nodes by their relativePath and return the first node that satisfies that query. Then, it will filter down the fields to return by the inner expression. I.e `{ childMarkdownRemark ... }`. The building of the query arguments is covered by the [Inferring Input Filters](/docs/schema-input-gql) doc. This section instead explains how the inner filter schema is generated (it must be generated before input filters are inferred).
 
-### gatsby-config.js
+During the [sourceNodes](/docs/node-apis/#sourceNodes) phase, let's say that [gatsby-source-filesystem](/packages/gatsby-source-filesystem) ran and created a bunch of `File` nodes. Then, different transformers react via [onCreateNode](/docs/node-apis/#onCreateNode), resulting in children of different `node.internal.type`s being created.
 
-Essentially the Gatsby home base. The two things defined here initially (in the starter) are `siteMetadata` and `plugins` you can add to enable new functionalities on your site.
+There are 3 categories of node fields that we can query.
 
-```javascript:title=gatsby-config.js module.exports = { siteMetadata: { title: "Gatsby Default Starter", }, plugins: ["gatsby-plugin-react-helmet"], ... }
+#### Fields on the created node object. E.g
 
-    <br />### Plugin: gatsby-source-wordpress
+```graphql
+node {
+  relativePath,
+  extension,
+  size,
+  accessTime
+}
+```
+
+#### Child/Parent. E.g:
+
+```graphql
+node {
+  childMarkdownRemark,
+  childrenPostsJson,
+  children,
+  parent
+}
+```
+
+#### fields created by setFieldsOnGraphQLNodeType
+
+```graphql
+node {
+  publicURL
+}
+```
+
+Each of these categories of fields is created in a different way, explained below.
+
+## gqlType Creation
+
+The Gatsby term for the GraphQLObjectType for a unique node type, is `gqlType`. GraphQLObjectTypes are simply objects that define the type name and fields. The field definitions are created by the [createNodeFields](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/build-node-types.js#L48) function in `build-node-types.js`.
+
+An important thing to note is that all gqlTypes are created before their fields are inferred. This allows fields to be of types that haven't yet been created due to their order of compilation. This is accomplished by the use of `fields` [being a function](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/build-node-types.js#L167) (basically lazy functions).
+
+The first step in inferring GraphQL Fields is to generate an `exampleValue`. It is the result of merging all fields of all nodes of the type in question. This `exampleValue` will therefore contain all potential field names and values, which allows us to infer each field's types. The logic to create it is in [getExampleValues](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/data-tree-utils.js#L305).
+
+With the exampleValue in hand, we can use each of its key/values to infer the Type's fields (broken down by the 3 categories above).
+
+### Fields on the created node object
+
+Fields on the node that were created directly by the source and transform plugins. E.g for `File` type, these would be `relativePath`, `size`, `accessTime` etc.
+
+The creation of these fields is handled by the [inferObjectStructureFromNodes](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/infer-graphql-type.js#L317) function in [infer-graphql-type.js](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/infer-graphql-type.js). Given an object, a field could be in one of 3 sub-categories:
+
+1. It involves a mapping in [gatsby-config.js](/docs/gatsby-config/#mapping-node-types)
+2. It's value is a foreign key reference to some other node (ends in `___NODE`)
+3. It's a plain object or value (e.g String, number, etc)
+
+#### Mapping field
+
+Mappings are explained in the [gatsby-config.js docs](/docs/gatsby-config/#mapping-node-types). If the object field we're generating a GraphQL type for is configured in the gatsby-config mapping, then we handle it specially.
+
+Imagine our top level Type we're currently generating fields for is `MarkdownRemark.frontmatter`. And the field we are creating a GraphQL field for is called `author`. And, that we have a mapping setup of:
+
+```javascript
+mapping: {
+  "MarkdownRemark.frontmatter.author": `AuthorYaml.name`,
+},
+```
+
+The field generation in this case is handled by [inferFromMapping](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/infer-graphql-type.js#L129). The first step is to find the type that is mapped to. In this case, `AuthorYaml`. This is known as the `linkedType`. That type will have a field to link by. In this case `name`. If one is not supplied, it defaults to `id`. This field is known as `linkedField`
+
+Now we can create a GraphQL Field declaration whose type is `AuthorYaml` (which we look up in list of other `gqlTypes`). The field resolver will get the value for the node (in this case, the author string), and then search through the react nodes until it finds one whose type is `AuthorYaml` and whose `name` field matches the author string.
+
+#### Foreign Key reference (`___NODE`)
+
+If not a mapping field, it might instead end in `___NODE`, signifying that its value is an ID that is a foreign key reference to another node in redux. Check out the [Source Plugin Tutorial](/docs/pixabay-source-plugin-tutorial/) for how this works from a user point of view. Behind the scenes, the field inference is handled by [inferFromFieldName](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/infer-graphql-type.js#L204).
+
+This is actually quite similar to the mapping case above. We remove the `___NODE` part of the field name. E.g `author___NODE` would become `author`. Then, we find our `linkedNode`. I.e given the example value for `author` (which would be an ID), we find its actual node in redux. Then, we find its type in processed types by its `internal.type`. Note, that also like in mapping fields, we can define the `linkedField` too. This can be specified via `nodeFieldname___NODE___linkedFieldName`. E.g for `author___NODE___name`, the linkedField would be `name` instead of `id`.
+
+Now we can return a new GraphQL Field object, whose type is the one found above. Its resolver searches through all redux nodes until it finds one with the matching ID. As usual, it also creates a [page dependency](/docs/page-node-dependencies/), from the query context's path to the node ID.
+
+If the foreign key value is an array of IDs, then instead of returning a Field declaration for a single field, we return a `GraphQLUnionType`, which is a union of all the distinct linked types in the array.
+
+#### Plain object or value field
+
+If the field was not handled as a mapping or foreign key reference, then it must be a normal every day field. E.g a scalar, string, or plain object. These cases are handled by [inferGraphQLType](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/infer-graphql-type.js#L38).
+
+The core of this step creates a GraphQL Field object, where the type is inferred directly via the result of `typeof`. E.g `typeof(value) === 'boolean'` would result in type `GraphQLBoolean`. Since these are simple values, resolvers are not defined (graphql-js takes care of that for us).
+
+If however, the value is an object or array, we recurse, using [inferObjectStructureFromNodes](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/infer-graphql-type.js#L317) to create the GraphQL fields.
+
+In addition, Gatsby creates custom GraphQL types for `File` ([types/type-file.js](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/types/type-file.js)) and `Date` ([types/type-date.js](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/types/type-file.js)). If the value of our field is a string that looks like a filename or a date (handled by [should-infer](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/infer-graphql-type.js#L52) functions), then we return the appropriate custom type.
+
+### Child/Parent fields
+
+#### Child fields creation
+
+Let's continue with the `File` type example. There are many transformer plugins that implement `onCreateNode` for `File` nodes. These produce `File` children that are of their own type. E.g `markdownRemark`, `postsJson`.
+
+Gatsby stores these children in redux as IDs in the parent's `children` field. And then stores those child nodes as full redux nodes themselves (see [Node Creation](/docs/node-creation/#node-relationship-storage-model) for more). E.g for a File node with two children, it will be stored in the redux `nodes` namespace as:
+
+```javascript
+{
+  `id1`: { type: `File`, children: [`id2`, `id3`], ...other_fields },
+  `id2`: { type: `markdownRemark`, ...other_fields },
+  `id3`: { type: `postsJson`, ...other_fields }
+}
+```
+
+An important note here is that we do not store a distinct collection of each type of child. Rather we store a single collection that they're all packed into. The benefit of this is that we can easily create a `File.children` field that returns all children, regardless of type. The downside is that the creation of fields such as `File.childMarkdownRemark` and `File.childrenPostsJson` is more complicated. This is what [createNodeFields](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/build-node-types.js#L48) does.
+
+Another convenience Gatsby provides is the ability to query a node's `child` or `children`, depending on whether a parent node has 1 or more children of that type.
+
+#### child resolvers
+
+When defining our parent `File` gqlType, [createNodeFields](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/build-node-types.js#L48) will iterate over the distinct types of its children, and create their fields. Let's say one of these child types is `markdownRemark`. Let's assume there is only one `markdownRemark` child per `File`. Therefore, its field name is `childMarkdownRemark`. Now, we must create its graphql Resolver.
+
+    resolve(node, args, context, info)
     
-    Now that you have some understanding of project structure lets add fetching WordPress data functionality. There's a plugin for that. [`gatsby-source-wordpress`](https://github.com/gatsbyjs/gatsby/tree/master/packages/gatsby-source-wordpress) is Gatsby's plugin for sourcing data from WordPress sites using the WordPress JSON REST API. You can install it by running the following command:
-    
-    ```shell
-    npm install gatsby-source-wordpress
-    
 
-### Configuring the plugin
+The resolve function will be called when we are running queries for our pages. A query might look like:
 
-In `gatsby-config.js`, add your configuration options, including your WordPress site's baseUrl, protocol, whether it's hosted on [wordpress.com](http://wordpress.com/) or self-hosted, and whether it makes use of the Advanced Custom Fields (ACF) plugin.
+```graphql
+query {
+  file( relativePath { eq: "blog/my-blog.md" } ) {
+    childMarkdownRemark { html }
+  }
+}
+```
 
-```javascript:title=gatsby-config.js module.exports = { ... plugins: [ ..., { resolve: `gatsby-source-wordpress`, options: { // your wordpress source baseUrl: `wpexample.com`, protocol: `https`, // is it hosted on wordpress.com, or self-hosted? hostingWPCOM: false, // does your site use the Advanced Custom Fields Plugin? useACF: false } }, ] }
+To resolve `file.childMarkdownRemark`, we take the node we're resolving, and filter over all of its `children` until we find one of type `markdownRemark`, which is returned. Remember that `children` is a collection of IDs. So as part of this, we lookup the node by ID in redux too.
 
-    <br />**Note**: If your config varies from what it shown above, for instance, if you are hosting your WordPress instance on WordPress.com, please refer to the [plugin docs](/packages/gatsby-source-wordpress/?=wordpre#how-to-use) for more information on how to setup other options required for your use case.
+But before we return from the resolve function, remember that we might be running this query within the context of a page. If that's the case, then whenever the node changes, the page will need to be rerendered. To record that fact, we call [createPageDependency](/docs/page-node-dependencies/) with the node ID and the page, which is a field in the `context` object in the resolve function signature.
+
+#### parent field
+
+When a node is created as a child of some node (parent), that fact is stored in the child's `parent` field. The value of which is the ID of the parent. The [GraphQL resolver](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/build-node-types.js#L57) for this field looks up the parent by that ID in redux and returns it. It also creates a [page dependency](/docs/page-node-dependencies/), to record that the page being queried depends on the parent node.
+
+### Plugin fields
+
+These are fields created by plugins that implement the [setFieldsOnGraphQLNodeType](/docs/node-apis/#setFieldsOnGraphQLNodeType) API. These plugins return full GraphQL Field declarations, complete with type and resolve functions.
+
+### File types
+
+As described in [plain object or value field](#plain-object-or-value-field), if a string field value looks like a file path, then we infer `File` as the field's type. The creation of this type occurs in [type-file.js setFileNodeRootType()](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/types/type-file.js#L18). It is called just after we have created the GqlType for `File` (only called once).
+
+It creates a new GraphQL Field Config whose type is the just created `File` GqlType, and whose resolver converts a string into a File object. Here's how it works:
+
+Say we have a `data/posts.json` file that has been sourced (of type `File`), and then the [gatsby-transformer-json](/packages/gatsby-transformer-json) transformer creates a child node (of type `PostsJson`)
+
+```javascript:title=data/posts.json ;[ { id: "1685001452849004065", text: "Venice is 👌", image: "images/BdiU-TTFP4h.jpg", }, ]
+
+    <br />Notice that the image value looks like a file. Therefore, we'd like to query it as if it were a file, and get its relativePath, accessTime, etc.
     
-    ## Using WordPress data
-    
-    Once your source plugin is pulling data, you can construct your site pages by implementing the `createPages` API in `gatsby-node.js`. When this is called, your data has already been fetched and is available to query with GraphQL. Gatsby uses [GraphQL at build time](/docs/querying-with-graphql/#how-does-graphql-and-gatsby-work-together); Your source plugin (in this case, `gatsby-source-wordpress`) fetches your data, and Gatsby uses that data to "[automatically _infer_ a GraphQL schema](/docs/querying-with-graphql/#how-does-graphql-and-gatsby-work-together)" that you can query against.
-    
-    The `createPages` API exposes the `graphql` function:
-    
-    &gt; The GraphQL function allows us to run arbitrary queries against the local WordPress GraphQL schema... like the site has a built-in database constructed from the fetched data that you can run queries against. ([Source](https://github.com/gatsbyjs/gatsby/blob/master/examples/using-wordpress/gatsby-node.js#L15))
-    
-    You can use the [`gatsby-node.js`](https://github.com/gatsbyjs/gatsby/blob/master/examples/using-wordpress/gatsby-node.js) from the plugin demo to get started. For the purpose of this guide, the code to construct posts works out of the box. It queries your local WordPress GraphQL schema for all Posts, [iterates through each Post node](/docs/programmatically-create-pages-from-data/) and constructs a static page for each, [based on the defined template](/docs/layout-components/).
-    
-    For example, find an excerpt of the demo `gatsby-node.js` below.
-    
-    ```javascript:title=gatsby-node.js
-    const path = require(`path`)
-    const slash = require(`slash`)
-    
-    exports.createPages = async ({ graphql, actions }) =&gt; {
-      const { createPage } = actions
-    
-      // query content for WordPress posts
-      const result = await graphql(`
-        query {
-          allWordpressPost {
-            edges {
-              node {
-                id
-                slug
-              }
-            }
-          }
+    ```graphql
+    {
+      postsJson(id: { eq: "1685001452849004065" }) {
+        image {
+          relativePath
+          accessTime
         }
-      `)
-    
-      const postTemplate = path.resolve(`./src/templates/post.js`)
-      result.data.allWordpressPost.edges.forEach(edge =&gt; {
-        createPage({
-          // will be the url for the page
-          path: edge.node.slug,
-          // specify the component template of your choice
-          component: slash(postTemplate),
-          // In the ^template's GraphQL query, 'id' will be available
-          // as a GraphQL variable to query for this posts's data.
-          context: {
-            id: edge.node.id,
-          },
-        })
-      })
+      }
     }
     
 
-After fetching data from WordPress via the query, all posts are iterated over, calling [`createPage`](/docs/actions/#createPage) for each one.
+The [File type resolver](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/types/type-file.js#L135) takes care of this. It gets the value (`images/BdiU-TTFP4h.jpg`). It then looks up this node's root NodeID via [Node Tracking](/docs/node-tracking/) which returns the original `data/posts.json` file. It creates a new filename by concatenating the field value onto the parent node's directory.
 
-A [Gatsby page is defined](/docs/api-specification/#concepts) as "a site page with a pathname, a template component, and an *optional* GraphQL query and Layout component."
+I.e `data` + `images/BdiU-TTFP4h.jpg` = `data/images/BdiU-TTFP4h.jpg`.
 
-When you restart your server with the `gatsby develop` command, you'll be able to navigate to the new pages created for each of your posts at their respective paths.
-
-In the GraphiQL IDE at [localhost:8000/\_\_graphql](http://localhost:8000/__graphql) you should now see queryable fields for `allWordpressPosts` in the docs or explorer sidebar.
-
-## Wrapping Up
-
-This was a very basic example meant to help you understand how you can fetch data from WordPress and use it with Gatsby. As the guide mentioned already, if you got stuck, you can have a look at [example repo](https://github.com/gatsbyjs/gatsby/tree/master/examples/using-wordpress), which is a working example created to support this guide.
-
-## Other resources
-
-- [Blog post on which this guide is based on](/blog/2018-01-22-getting-started-gatsby-and-wordpress/)
-- [Watch + Learn video tutorials](http://watch-learn.com/series/gatsbyjs-wordpress)
-- [Another blog post on using Gatsby with WordPress](https://indigotree.co.uk/how-use-wordpress-headless-cms/)
-- More [Gatsby blog posts about using Gatsby + Wordpress](/blog/tags/wordpress/)
+And then finally it searches redux for the first `File` node whose path matches this one. This is our proper resolved node. We're done!
