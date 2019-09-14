@@ -1,47 +1,49 @@
 ---
-title: Customizing Components
+title: Gatsby Project Structure
 ---
 
-Using MDX, you can replace every HTML element that Markdown renders with a custom implementation. This allows you to use a set of design system components when rendering.
+Inside a Gatsby project, you may see some or all of the following folders and files:
 
-```javascript:title=src/components/layout.js import { MDXProvider } from "@mdx-js/react" import * as DesignSystem from "your-design-system"
+    /
+    |-- /.cache
+    |-- /plugins
+    |-- /public
+    |-- /src
+        |-- /pages
+        |-- /templates
+        |-- html.js
+    |-- /static
+    |-- gatsby-config.js
+    |-- gatsby-node.js
+    |-- gatsby-ssr.js
+    |-- gatsby-browser.js
+    
 
-export default function Layout({ children }) { return ( <MDXProvider components={{ > <p {...props} style={{ color: "rebeccapurple" }} />, }} > {children} </MDXProvider> ) } ```
+### Folders
 
-The following components can be customized with the MDXProvider:
+- **`/.cache`** *Automatically generated.* This folder is an internal cache created automatically by Gatsby. The files inside this folder are not meant for modification. Should be added to the `.gitignore` file if not added already.
 
-| Tag             | Name                                                                 | Syntax                                                    |
-| --------------- | -------------------------------------------------------------------- | --------------------------------------------------------- |
-| `p`             | [Paragraph](https://github.com/syntax-tree/mdast#paragraph)          |                                                           |
-| `h1`            | [Heading 1](https://github.com/syntax-tree/mdast#heading)            | `#`                                                       |
-| `h2`            | [Heading 2](https://github.com/syntax-tree/mdast#heading)            | `##`                                                      |
-| `h3`            | [Heading 3](https://github.com/syntax-tree/mdast#heading)            | `###`                                                     |
-| `h4`            | [Heading 4](https://github.com/syntax-tree/mdast#heading)            | `####`                                                    |
-| `h5`            | [Heading 5](https://github.com/syntax-tree/mdast#heading)            | `#####`                                                   |
-| `h6`            | [Heading 6](https://github.com/syntax-tree/mdast#heading)            | `######`                                                  |
-| `thematicBreak` | [Thematic break](https://github.com/syntax-tree/mdast#thematicbreak) | `***`                                                     |
-| `blockquote`    | [Blockquote](https://github.com/syntax-tree/mdast#blockquote)        | `>`                                                    |
-| `ul`            | [List](https://github.com/syntax-tree/mdast#list)                    | `-`                                                       |
-| `ol`            | [Ordered list](https://github.com/syntax-tree/mdast#list)            | `1.`                                                      |
-| `li`            | [List item](https://github.com/syntax-tree/mdast#listitem)           |                                                           |
-| `table`         | [Table](https://github.com/syntax-tree/mdast#table)                  | `--- | --- | ---`                                         |
-| `tr`            | [Table row](https://github.com/syntax-tree/mdast#tablerow)           | `This | is | a | table row`                               |
-| `td`/`th`       | [Table cell](https://github.com/syntax-tree/mdast#tablecell)         |                                                           |
-| `pre`           | [Pre](https://github.com/syntax-tree/mdast#code)                     |                                                           |
-| `code`          | [Code](https://github.com/syntax-tree/mdast#code)                    |                                                           |
-| `em`            | [Emphasis](https://github.com/syntax-tree/mdast#emphasis)            | `_emphasis_`                                              |
-| `strong`        | [Strong](https://github.com/syntax-tree/mdast#strong)                | `**strong**`                                              |
-| `delete`        | [Delete](https://github.com/syntax-tree/mdast#delete)                | `~~strikethrough~~`                                       |
-| `code`          | [InlineCode](https://github.com/syntax-tree/mdast#inlinecode)        |                                                           |
-| `hr`            | [Break](https://github.com/syntax-tree/mdast#break)                  | `---`                                                     |
-| `a`             | [Link](https://github.com/syntax-tree/mdast#link)                    | `<https://mdxjs.com>` or `[MDX](https://mdxjs.com)` |
-| `img`           | [Image](https://github.com/syntax-tree/mdast#image)                  | `![alt](https://mdx-logo.now.sh)`                         |
+- **`/public`** *Automatically generated.* The output of the build process will be exposed inside this folder. Should be added to the `.gitignore` file if not added already.
 
+- **`/plugins`** This folder hosts any project-specific ("local") plugins that aren't published as an `npm` package. Check out the [plugin docs](/docs/plugins/) for more detail.
 
-## How does this work?
+- **`/src`** This directory will contain all of the code related to what you will see on the frontend of your site (what you see in the browser), like your site header, or a page template. “Src” is a convention for “source code”.
+    
+  - **`/pages`** Components under src/pages become pages automatically with paths based on their file name. Check out the [pages docs](/docs/recipes/#creating-pages) for more detail.
+  - **`/templates`** Contains templates for programmatically creating pages. Check out the [templates docs](/docs/building-with-components/#page-template-components) for more detail.
+  - **`html.js`** For custom configuration of default .cache/default_html.js. Check out the [custom html docs](/docs/custom-html/) for more detail.
+- **`/static`** If you put a file into the static folder, it will not be processed by Webpack. Instead it will be copied into the public folder untouched. Check out the [assets docs](/docs/static-folder/#adding-assets-outside-of-the-module-system) for more detail.
 
-Components passed to the MDXProvider are used to render the HTML elements that Markdown creates. It uses [React's Context API](https://reactjs.org/docs/context.html).
+### Files
 
-## Related
+- **`gatsby-browser.js`**: This file is where Gatsby expects to find any usage of the [Gatsby browser APIs](/docs/browser-apis/) (if any). These allow customization/extension of default Gatsby settings affecting the browser.
 
-- [MDX components](https://mdxjs.com/getting-started/)
+- **`gatsby-config.js`**: This is the main configuration file for a Gatsby site. This is where you can specify information about your site (metadata) like the site title and description, which Gatsby plugins you’d like to include, etc. Check out the [config docs](/docs/gatsby-config/) for more detail.
+
+- **`gatsby-node.js`**: This file is where Gatsby expects to find any usage of the [Gatsby node APIs](/docs/node-apis/) (if any). These allow customization/extension of default Gatsby settings affecting pieces of the site build process.
+
+- **`gatsby-ssr.js`**: This file is where Gatsby expects to find any usage of the [Gatsby server-side rendering APIs](/docs/ssr-apis/) (if any). These allow customization of default Gatsby settings affecting server-side rendering.
+
+### Miscellaneous:
+
+The file/folder structure described above reflects Gatsby-specific files and folders. Since Gatsby sites are also React apps, it's common to use standard React code organization patterns such as folders like `/components` and `/utils` inside `/src`. The [React docs](https://reactjs.org/docs/faq-structure.html) have more information on a typical React app folder structure.
