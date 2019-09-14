@@ -1,47 +1,54 @@
 ---
-title: Adding Components to Markdown with MDX
+title: Getting Started with MDX
 ---
 
-When writing long-form content in Markdown you might want to embed [components](/docs/glossary/#component). This is often achieved by either writing content in JSX or using plugins that use custom syntax. The first approach isn't optimal because JSX isn't the best format for content and can make it less approachable to members of a team. Custom syntax and plugins are often too inflexible and don't promote composition. If you're finding yourself wanting to add components to your content you can use `gatsby-plugin-mdx` which is a Gatsby plugin to integrate MDX into your project.
+The fastest way to get started with Gatsby + MDX is to use the [MDX starter](https://github.com/ChristopherBiscardi/gatsby-starter-mdx-basic). This allows you to write .mdx files in `src/pages` in order to create new pages on your site.
 
-## What's MDX?
+## 🚀 Quick start
 
-[MDX](https://mdxjs.com) is Markdown for the component era. It lets you write JSX embedded inside Markdown. It’s a great combination because it allows you to use Markdown’s terse syntax (such as `# Heading`) for your content and JSX for more advanced, or reusable components.
+1. **Initialize the MDX starter** with the Gatsby CLI
 
-This is useful in content-driven sites where you want the ability to introduce components like charts or alerts without having to configure a plugin. It emphasizes composition over configuration and really shines with interactive blog posts, documenting design systems, or long form articles with immersive or dynamic interactions.
+   ```sh
+   gatsby new my-mdx-starter https://github.com/ChristopherBiscardi/gatsby-starter-mdx-basic
+   ```
 
-When using MDX you can also import other MDX documents and render them as components. This lets you write something like an FAQ page in one place and reuse it throughout your website.
+1. **Run the dev server** by changing directory to the scaffolded site and install dependencies
 
-## What does it look like in practice?
+   ```sh
+   cd my-mdx-starter/
+   gatsby develop
+   ```
 
-Importing and JSX syntax works just like it does in your components. This results in a seamless experience for developers and content authors alike. Markdown and JSX are included alongside each other like this:
+1. **Open the site** running at http://localhost:8000
 
-```md
-import { Chart } from '../components/chart'
+2. **Update the MDX content** by opening the `my-mdx-starter` directory in your code editor of choice and edit `src/pages/index.mdx`. Save your changes and the browser will update in real time!
 
-# Here’s a chart
+## Add MDX to an existing Gatsby site
 
-The chart is rendered inside our MDX document.
+If you already have a Gatsby site that you'd like to add MDX to, you can follow these steps for configuring the [gatsby-plugin-mdx](/packages/gatsby-plugin-mdx/) plugin:
 
-<Chart />
-```
+1. **Add `gatsby-plugin-mdx`** and MDX as dependencies
 
-## Features
+   ```sh
+   npm install gatsby-plugin-mdx @mdx-js/mdx @mdx-js/react
+   ```
 
-❤️ **Powerful**: MDX blends Markdown and JSX syntax to fit perfectly in React/JSX-based projects.
+> **Note:** If you're upgrading from v0, additionally [check out the MDX migration guide](https://mdxjs.com/migrating/v1).
 
-💻 **Everything is a component**: Use existing components inside your MDX and import other MDX files as plain components.
+1. **Update your `gatsby-config.js`** to use `gatsby-plugin-mdx`
+    
+        javascript:title=gatsby-config.js
+        module.exports = {
+         plugins: [
+           // ....
+           `gatsby-plugin-mdx`,
+         ],
+        }
 
-🔧 **Customizable**: Decide which component is rendered for each Markdown element (`{ h1: MyHeading }`).
+2. **Restart `gatsby develop`** and add an `.mdx` page to `src/pages
 
-📚 **Markdown-based**: The simplicity and elegance of markdown remains; you interleave JSX only when you want to.
+> **Note:** If you want to query for frontmatter, exports, or other fields like `tableOfContents` and you haven't previously added a `gatsby-source-filesystem` pointing at `src/pages` in your project, you'll want to add one now.
 
-🔥 **Blazingly blazing fast**: MDX has no runtime, all compilation occurs during the build stage.
+## What's next?
 
-## Guides in this section
-
-- [Getting started](/docs/mdx/getting-started)
-- [Writing pages in MDX](/docs/mdx/writing-pages)
-- [Customizing components](/docs/mdx/customizing-components)
-- [Programmatically creating pages](/docs/mdx/programmatically-creating-pages)
-- [Using plugins](/docs/mdx/plugins)
+Go check out the [writing MDX guide](/docs/mdx/writing-pages) to find out what else you can do with Gatsby and MDX.
