@@ -1,0 +1,7 @@
+files:
+  - source: /docs/
+    ignore:
+      - /docs/contributing/images
+      - /docs/docs/images
+      - /docs/features
+    translation: /translation/%two_letters_code%.%file_extension%
