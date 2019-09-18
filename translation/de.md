@@ -1,772 +1,289 @@
 ---
-title: Sourcing from ButterCMS
+title: Programmatically Creating Pages
 ---
 
-## Overview
+Sometimes you want to be able to programmatically access data from files in `src/pages/` or create pages using MDX content that lives at arbitrary locations outside of `src/pages/` or in remote CMSes.
 
-In this guide we'll be setting up a CMS powered Gatsby site that uses [ButterCMS](https://buttercms.com/) as its content management system.
+For instance, let's say you have a Gatsby website, and you want to add support for MDX so you can start your blog. The posts will live in `content/posts/`. You can do this with the help of `gatsby-source-filesystem` and [`createPages`](/docs/node-apis/#createPages) in `gatsby-node.js`.
 
-To complete this tutorial, you'll need your own ButterCMS auth token which you can [get yours free here](https://buttercms.com/#signup).
+## Source MDX pages from the filesystem
 
-ButterCMS is a headless CMS that lets you manage content using their dashboard and integrate it into your tech stack of choice with their content APIs. You can use ButterCMS for new projects as well as add it to existing codebases.
+To let Gatsby know that you'll be working with MDX content you need to add `gatsby-plugin-mdx` to the plugins array in your `gatsby-config.js` file.
 
-ButterCMS provides a user-friendly UI for managing marketing sites, blogging, and custom content scenarios. We can be used for SEO landing pages, customer case studies, company news & updates, events + webinar pages, education center, location pages, knowledgebases, and more.
+You'll need to use `gatsby-source-filesystem` and tell it to source "posts" from a folder called `content/posts` located in the project's root.
 
-ButterCMS is different from a traditional CMS like Drupal or Wordpress in that they're not a large piece of software you need to download, host, customize, and maintain. Instead they provide easy to consume, performant content API's that you add to your application.
+> **NOTE**: `gatsby-plugin-mdx` uses `.mdx` by default as a file extension to recognize which files to use. You can also [use `.md` as a file extension](/packages/gatsby-plugin-mdx#extensions) if you want.
 
-For example, if you wanted to enable a non-technical person to be able to add customer case study pages to your marketing site, you might create a Case Study Page Type to represent these pages. The non-technical person would be able to manage these pages from their dashboard and the JSON API output would look something like this:
+```javascript:title=gatsby-config.js module.exports = { plugins: [ // Add support for *.mdx files in gatsby "gatsby-plugin-mdx",
 
-```json
-{
-  "data": {
-    "slug": "acme-co-case-study",
-    "fields": {
-      "seo_title": "Acme Co Customer Case Study",
-      "seo_description": "Acme Co saved 200% on Anvil costs with ButterCMS",
-      "title": "Acme Co loves ButterCMS",
-      "body": "<p>We've been able to make anvils faster than ever before! - Chief Anvil Maker</p>"
-    }
-  }
-}
-```
-
-# Setup
-
-## Create a new Gatsby site with the [default starter](https://github.com/gatsbyjs/gatsby-starter-default)
-
-Run this in your terminal:
-
-`gatsby new butter-site`
-
-## Install the source plugin
-
-`npm install gatsby-source-buttercms`
-
-## Adding Configuration
-
-Here you'll specify the config that will be needed to pull down data from butter. make sure to add your **API_TOKEN** from your dashboard, in this guide we would be creating `faq_items`, `faq_headline`, `homepage` , `customer_case_study` as stated in the config below. Do well to change it if you named it something differently.
-
-```javascript:title=gatsby-config.js module.exports = { { resolve: `gatsby-source-buttercms`, options: { authToken: `your_auth_token`, // Optional. Returns values for the supplied content field keys. contentFields: { keys: [`faq_items`, `faq_headline`], // Optional. Set to 1 to enable test mode for viewing draft content. test: 0, }, // Optional. Array of page slugs. pages: [`homepage`], // Optional. Array of page types. pageTypes: [`customer_case_study`], }, }, }
-
-    <br />More details [here](https://github.com/buttercms/gatsby-source-buttercms)
-    
-    ## ButterCMS Starter Template
-    
-    To see a fully complete Gatsby+ButterCMS project check out this [Gatsby ButterCMS Starter Project](https://github.com/ButterCMS/gatsby-starter-buttercms). It contains real world examples of how to use Pages, Posts, and ContentFields.
-    
-    # Usage
-    
-    ## Webhooks
-    
-    Webhooks are a powerful feature that allow you to notify your internal systems whenever content in ButterCMS has changed.
-    Your host platform need to be notified so that gatsby can create fresh pages from the new data. You can learn more about Webhooks in this [blog post](https://buttercms.com/blog/webhook-vs-api-whats-the-difference). Checkout your host platform form incoming webhooks so we can hit it anytime your content changes. Netlify lets you generate a build hook that will be triggered by butter on certain event e.g when we create or update a blog post more details [here](https://buttercms.com/docs/api/#webhooks)
-    
-    ![Webhook](https://buttercms.com/static/images/docs/guides/OverviewWebhooks.caade716f770.png "Webhook")
-    
-    ## Image Transformation
-    
-    ButterCMS has integrated with a rich image transformation API called Filestack. This allows you to modify your uploaded images in dozens of ways. Everything from resizing, cropping, effects, filters, applying watermarks and more. Check out Filestack full documentation for more detail.
-    
-    After you upload an image to ButterCMS, it's stored on our CDN. To create a thumbnail, here's an example:
-    
-    Original URL = https://cdn.buttercms.com/zjypya5tRny63LqhHQrv
-    
-    Thumbnail URL = https://fs.buttercms.com/resize=width:200,height:200/zjypya5tRny63LqhHQrv
-    
-    Resizing is just one of the many different transformations you can do to your images. Refer to the [Filestack docs](https://www.filestack.com/docs/) for full details.
-    
-    ## Localization
-    
-    ButterCMS has full support for localization of your content. Locale names and keys are completely customizable and there's no limit to the number of locales you can have. View their [API Reference](https://buttercms.com/docs/api/) to learn how to query by locale.
-    
-    ![locales](https://buttercms.com/static/images/docs/guides/Localization.54a005530001.png)
-    
-    # Creating pages
-    
-    ### Introduction
-    
-    Quickly launch a new marketing site or add CMS-powered pages to your existing site using our Pages.
-    
-    ## Creating a Single page(Home Page)
-    
-    ### Introduction
-    
-    Quickly launch a new marketing site or add [CMS-powered pages](https://buttercms.com/gatsbyjs-cms/) to your existing site using our Pages.
-    
-    ### Create a Single Page
-    
-    Adding a CMS-powered page to your app involves three easy steps:
-    
-    1. Create the Page structure
-    1. Populate the content
-    1. Integrate into your application
-    
-    If you need help after reading this, contact us via email or livechat.
-    
-    #### Create the Page structure
-    
-    Create a new Page and define it's structure using our Page Builder. Let's create an example homepage.
-    
-    ![image](https://buttercms.com/static/images/docs/guides/PagesNewSinglePage.d6038e2b75a0.png)
-    
-    #### Populate the Content
-    
-    Then populate our new page with content. In the next step, we'll call the ButterCMS API to retrieve this content from our app.
-    
-    ![image](https://buttercms.com/static/images/docs/guides/PagesNewSinglePageContent.c582e2451f7f.png)
-    
-    ### Integrate into your application
-    
-    With your homepage defined, the ButterCMS our graphql query will return some data that looks like this:
-    
-    ```json
+    // Add a collection called "posts" that looks
+    // for files in content/posts/
     {
-      "data": {
-        "slug": "homepage",
-        "fields": {
-          "seo_title": "Anvils and Dynamite | Acme Co",
-          "headline": "Acme Co provides supplies to your favorite cartoon heroes.",
-          "hero_image": "https://cdn.buttercms.com/c8oSTGcwQDC5I58km5WV",
-          "call_to_action": "Buy Now",
-          "customer_logos": [
-            {
-              "logo_image": "https://cdn.buttercms.com/c8oSTGcwQDC5I58km5WV"
-            },
-            {
-              "logo_image": "https://cdn.buttercms.com/c8oSTGcwQDC5I58km5WV"
-            }
-          ]
-        }
-      }
-    }
-    
-
-Now lets create the home page:
-
-```jsx:title=src/pages/index.js import React from "react" import { graphql, Link } from "gatsby" import Layout from "../components/layout" import SEO from "../components/seo"
-
-const IndexPage = ({ data }) => { const home = data.home.edges[0].node
-
-return ( <Layout> <SEO title={home.seo_title} keywords={[`gatsby`, `application`, `react`]} /> <div style={{ height: `50%`, display: `flex`, padding: `1rem`, alignItems: `center`, justifyContent: flexDirection: `column`, background: `linear-gradient(-45deg, rgb(29, 64, 86) 0%, rgb(60, 24, 78) 100%)`, }} > <h1 style={{ textAlign: `center`, color: `white`, fontSize: `2.5rem`, fontWeight: `100`, maxWidth: `960px`, }} > {home.headline} </h1> <button style={{ padding: `0.75rem`, backgroundColor: `white`, border: `none`, fontSize: `1.5rem`, borderRadius: `10px`, }} > {home.call_to_action} </button> </div>
-
-      {/* <h1> {page.hero_image}</h1> */}
-    
-      <h1 style={{ fontWeight: `100`, textAlign: `center` }}>Our Customers</h1>
-      <div
-        style={{
-          display: `flex`,
-          flexDirection: `column`,
-          alignItems: `center`,
-          justifyContent: `center`,
-        }}
-      >
-        {home.customer_logos.map(({ logo_image }) => (
-          <img
-            key={logo_image}
-            style={{ width: `200px`, borderRadius: `10px` }}
-            src={logo_image}
-          />
-        ))}
-      </div>
-    </Layout>
-    
-
-) }
-
-//GraphQl query to fetch homepage data export const query = graphql`{
-    home: allButterPage(filter: { slug: { eq: "homepage" } }) {
-      edges {
-        node {
-          slug
-          headline
-          seo_title
-          customer_logos {
-            logo_image
-          }
-          hero_image
-          call_to_action
-        }
-      }
-    }
-  }`
-
-export default IndexPage
-
-    <br />in your terminal, run
-    
-    ```shell
-    gatsby develop
-    
-
-Now open up [localhost:8000/home](http://localhost:8000/home) to see the home page populated with the content you created on butter.
-
-## Create multiple pages using Page Types
-
-Let's say you want to add a set of customer case study pages to your marketing site. They all have the same structure but the content is different. Page Types are perfect for this scenario and involves three easy steps:
-
-1. Create the Page Type structure
-2. Populate the content
-3. Integrate into your application
-
-If you need help after reading this, contact us via email or livechat.
-
-## Create the Page Type structure
-
-Create a Page Type to represent your Customer Case Study pages: ![page structure](https://buttercms.com/static/images/docs/guides/PagesNewPageType1.18834db5cf0b.png)
-
-After saving, return to the configuration page by clicking the gear icon: ![image](https://buttercms.com/static/images/docs/guides/PagesNewPageType2.6fa0dea4872c.png)
-
-Then click on Create Page Type and name it "Customer Case Study". This will allow us to reuse this field configuration across multiple customer case study pages:
-
-![saving](https://buttercms.com/static/images/docs/guides/PagesNewPageType3.70f0c287ae91.png)
-
-## Populate the Content
-
-Then populate our new page with content. In the next step, we'll call the ButterCMS API to retrieve this content from our app.
-
-![](https://buttercms.com/static/images/docs/guides/PagesNewPageTypeCreateContent.6164c9b9cf19.png)
-
-To Pull down content into gatsby run:
-
-```shell
-gatsby develop
-```
-
-### Testing with GrapiQl
-
-You can test out your Graphql queries with GrahiQl( A graphql debugger) fire up Graphiql on [http://localhost:8000/**\_graphql](http://localhost:8000/___graphql)
-
-Once graphiql is opened paste the query below :
-
-```graphql
-{
-  allButterPage(filter: { page_type: { eq: "customer_case_study" } }) {
-    edges {
-      node {
-        id
-        facebook_open_graph_title
-        seo_title
-        headline
-        customer_logo
-        testimonial
-      }
-    }
-  }
-}
-```
-
-## Integrate into your application
-
-Now lets refactor our home page to display link(s) to each customer case study page
-
-```jsx:title=src/pages/index.js import React from "react" import { graphql, Link } from "gatsby" import Layout from "../components/layout" import SEO from "../components/seo"
-
-const IndexPage = ({ data }) => { console.log(data) const home = data.home.edges[0].node const case_studies = data.case_studies.edges
-
-return ( <Layout> <SEO title={home.seo_title} keywords={[`gatsby`, `application`, `react`]} /> <div style={{ height: `50%`, display: `flex`, padding: `1rem`, alignItems: `center`, justifyContent: flexDirection: `column`, background: `linear-gradient(-45deg, rgb(29, 64, 86) 0%, rgb(60, 24, 78) 100%)`, }} > <h1 style={{ textAlign: `center`, color: `white`, fontSize: `2.5rem`, fontWeight: `100`, maxWidth: `960px`, }} > {home.headline} </h1> <button style={{ padding: `0.75rem`, backgroundColor: `white`, border: `none`, fontSize: `1.5rem`, borderRadius: `10px`, }} > {home.call_to_action} </button> </div>
-
-      <h1 style={{ fontWeight: `100`, textAlign: `center` }}>Our Customers</h1>
-      <div
-        style={{
-          display: `flex`,
-          flexDirection: `column`,
-          alignItems: `center`,
-          justifyContent: `center`,
-        }}
-      >
-        {home.customer_logos.map(({ logo_image }) => (
-          <img
-            key={logo_image}
-            style={{ width: `200px`, borderRadius: `10px` }}
-            src={logo_image}
-          />
-        ))}
-    
-        <h1 style={{ fontWeight: `100` }}>Case Studies</h1>
-        {case_studies.map(({ node: { id, slug, headline } }) => (
-          <div key={id}>
-            <Link to={`case-study/${slug}`}>{headline}</Link>
-          </div>
-        ))}
-      </div>
-    </Layout>
-    
-
-) }
-
-export const query = graphql`{
-    home: allButterPage(filter: { slug: { eq: "homepage" } }) {
-      edges {
-        node {
-          slug
-          headline
-          seo_title
-          customer_logos {
-            logo_image
-          }
-          hero_image
-          call_to_action
-        }
-      }
-    }
-    case_studies: allButterPage(
-      filter: { page_type: { eq: "customer_case_study" } }
-    ) {
-      edges {
-        node {
-          id
-          slug
-          facebook_open_graph_title
-          seo_title
-          headline
-          testimony
-          customer_logo
-        }
-      }
-    }
-  }`
-
-export default IndexPage
-
-    <br />Next we'll refactor `gatsby-node-js` to programmatically create customer case study pages with gatsby create pages API. First we need to define a customer case study template
-    
-    ```jsx:title=src/templates/customer-case-study.js
-    import React from "react"
-    import { graphql } from "gatsby"
-    import Layout from "../components/layout"
-    import SEO from "../components/seo"
-    
-    function CustomerCaseStudy({ data }) {
-      const page = data.allButterPage.edges[0].node
-    
-      return (
-        &lt;Layout&gt;
-          &lt;SEO title={page.facebook_open_graph_title} description={page.headline} /&gt;
-          &lt;div&gt;
-            &lt;h1&gt;{page.seo_title}&lt;/h1&gt;
-            &lt;p&gt;{page.headline}&lt;/p&gt;
-            &lt;img alt="customer_logo" src={page.customer_logo} /&gt;
-            &lt;p&gt;{page.testimonial}&lt;/p&gt;
-          &lt;/div&gt;
-        &lt;/Layout&gt;
-      )
-    }
-    
-    export const pageQuery = graphql`
-      query CaseStudyPageBySlug($slug: String!) {
-        allButterPage(filter: { slug: { eq: $slug } }) {
-          edges {
-            node {
-              id
-              slug
-              facebook_open_graph_title
-              seo_title
-              headline
-              testimony
-              customer_logo
-            }
-          }
-        }
-      }
-    `
-    
-    export default CustomerCaseStudy
-    
-
-Now Let's programmatically Create customer case study pages based on the template we defined in `src/template/customer-case-study.js`
-
-```javascript:title=gatsby-node.js const path = require(`path`)
-
-exports.createPages = async ({ graphql, actions }) => { const { createPage } = actions
-
-// Blog post template const blogPost = path.resolve(`./src/templates/blog-post.js`)
-
-//customer case study template const customerCaseStudy = path.resolve( `./src/templates/customer-case-study.js` )
-
-let posts try { posts = await graphql(`{
-        allButterPost {
-          edges {
-            node {
-              id
-              seo_title
-              slug
-              categories {
-                name
-                slug
-              }
-              author {
-                first_name
-                last_name
-                email
-                slug
-                profile_image
-              }
-              body
-            }
-          }
-        }
-      }`) } catch (error) { console.log(`Error Running Querying Posts`, error) }
-
-posts = posts.data.allButterPost.edges
-
-posts.forEach((post, index) => { const previous = index === posts.length - 1 ? null : posts[index + 1].node const next = index === 0 ? null : posts[index - 1].node
-
-    // Create blog posts pages.
-    createPage({
-      path: `/blog/${post.node.slug}`,
-      component: blogPost,
-      context: {
-        slug: post.node.slug,
-        previous,
-        next,
+      resolve: "gatsby-source-filesystem",
+      options: {
+        name: "posts",
+        path: `${__dirname}/content/posts/`,
       },
-    })
+    },
     
 
-})
+], }
 
-// Fetch Customer Case study pages let pages try { pages = await graphql(`{
-        allButterPage(filter: { page_type: { eq: "customer_case_study" } }) {
-          edges {
-            node {
-              id
-              slug
-              facebook_open_graph_title
-              seo_title
-              headline
-              testimony
-              customer_logo
-            }
-          }
-        }
-      }`) } catch (error) { console.log(`Error Running Querying Pages`, error) }
-
-//Create Customer Case study pages pages.data.allButterPage.edges.forEach(page => { createPage({ path: `/case-study/${page.node.slug}`, component: customerCaseStudy, context: { slug: page.node.slug, }, }) }) }
-
-    <br />That's it! now stop the server and run:
+    <br />You can read about
+    [`gatsby-source-filesystem`](/packages/gatsby-source-filesystem)
+    if you'd like to learn more.
+    
+    ## Add MDX Files
+    
+    Before you can write any GraphQL queries and programmatically create
+    pages, you need to add some content.
+    
+    Make a folder called `content/posts` and create two files in it called
+    `blog-1.mdx` and `blog-2.mdx`. You can do this on the command line in
+    a terminal by using the following commands from the root of your
+    project.
     
     ```shell
-    gatsby develop
+    mkdir -p content/posts
+    touch content/posts/blog-{1,2}.mdx
     
 
-Now the home page should contain links to customer case study pages, Click around you'll notice that the template we defined in `src/template/customer_case_study.js` was use by gatsby to create each case study page.
+> **NOTE**: `mkdir -p path/to/a/directory` will create every folder in the path if it does not exist.
+> 
+> *`touch <filename>` will create an empty file named `<filename>`. The brackets (`{}`) are [an expansion](https://twitter.com/kentcdodds/status/1083399683932868609?s=19) which means we can create multiple files in one command.*
 
-## Setup content fields
+Open up each of the files you just created and add some content.
 
-Let's suppose we want to add a CMS to a static FAQ page with a title and a list of questions with answers. Most websites have a FAQ(Frequently Asked Question) Page. ButterCMS make it dead easy to create such content with Collections . Now we'll create a collection named `FAQs`having a `question` and `answer` field.
+## ```md:title=blog-1.mdx
 
-Making your content dynamic with Butter is a two-step process:
+## title: "Blog Post 1"
 
-1. **Setup custom content fields in Butter**
-2. **Integrate the fields into your application**
-3. **To setup custom content fields, first sign in to the Butter dashboard.**
+Trying out MDX
 
-Create a new workspace or click on an existing one. Workspaces let you organize content fields in a friendly way for content editors and have no effect on development or the API. For example, a real-estate website might have a workspace called "Properties" and another called "About Page".
-
-![create workspace](https://buttercms.com/static/images/docs/guides/FaqCreateWorkspace.png)
-
-Once you're in a workspace click the button to create a new content field. Choose the "Object" type and name the field "FAQ Headline":
-
-![new contentfield](https://buttercms.com/static/images/docs/guides/FaqCreateHeadline.png)
-
-After saving, add another field but this time choose the "Collection" type and name the field FAQ Items:
-
-![Add items](https://buttercms.com/static/images/docs/guides/FaqCreateItems.png)
-
-On the next screen setup two properties for items in the collection:
-
-![properties](https://buttercms.com/static/images/docs/guides/FaqCollectionProperties.png)
-
-Now go back to your workspace and update your heading and FAQ items.
-
-[workspace content](https://buttercms.com/static/images/docs/guides/FaqWorkspace.png)
-
-## Integrate into your application
-
-```javascript:title=src/pages/faq.js import React from "react" import { graphql } from "gatsby"
-
-import Layout from "../components/layout" import SEO from "../components/seo"
-
-const Faq = ({ data }) => { const FAQs = data.allButterCollection.edges[0].node.value const headline = data.allButterContentField.edges[0].node.value
-
-return ( <Layout> <SEO title="FAQ - Frequently Asked Questions" /> <h1 style={{ height: `30%`, color: `white`, display: `flex`, padding: `1rem`, alignItems: `center`, justifyContent: flexDirection: `column`, background: `linear-gradient(-45deg, rgb(29, 64, 86) 0%, rgb(60, 24, 78) 100%)`, }} > {headline} </h1> <div style={{ display: `flex`, padding: `10px` }}> {FAQs.map(faq => ( <div style={{ flexBasis: `50%`, padding: `10px`, background: `whitesmoke`, borderRadius: `10px`, margin: `5px`, }} > <h2 style={{ color: `#213b55` }}>{faq.question}</h2> <p style={{ fontSize: `1.5rem` }}>{faq.answer} </div> ))} </div> </Layout> ) }</p> 
-
-export const query = graphql` { allButterCollection(filter: { id: { eq: "faq_items" } }) { edges { node { id value { question answer } } } }
-
-    allButterContentField(filter: { id: { eq: "faq_headline" } }) {
-      edges {
-        node {
-          id
-          value
-        }
-      }
-    }
+    <br />```md:title=blog-2.mdx
+    ---
+    title: "Blog Post 2"
+    ---
+    
+    Gatsby is the best
     
 
-} ` export default Faq
+## Generate slugs
 
-    <br /># Blog
-    
-    ## Introduction
-    
-    Butter CMS is also a great feat if you want to spin up a blog, it's pretty easy as they provide a [blog engine](https://buttercms.com/gatsbyjs-blog-engine/) that helps you manage content in one place. Gatsby then pulls down the data at build time and create static pages off that data.
-    
-    # Blog Home Page
-    
-    Now we would create a home page for our blog posts. It basically lists all blog posts.
-    
-    ```jsx:title=src/pages/blog.js
-    import React from "react"
-    import { Link, graphql } from "gatsby"
-    import Layout from "../components/Layout"
-    import SEO from "../components/seo"
-    
-    class BlogIndex extends React.Component {
-      render() {
-        const { data } = this.props
-        const siteTitle = data.site.siteMetadata.title
-        const posts = data.allButterPost.edges
-    
-        return (
-          &lt;Layout location={this.props.location} title={siteTitle}&gt;
-            &lt;SEO
-              title="All posts"
-              keywords={[`blog`, `gatsby`, `javascript`, `react`]}
-            /&gt;
-    
-            &lt;div
-              style={{
-                alignItems: `center`,
-                justifyContent: `center`,
-                margin: `20px 0px 20px 0px`,
-              }}
-            &gt;
-              &lt;div
-                style={{
-                  maxWidth: `960px`,
-                  padding: `30px`,
-                }}
-              &gt;
-                {posts.map(({ node }) =&gt; {
-                  const title = node.seo_title || node.slug
-                  return (
-                    &lt;div
-                      key={node.slug}
-                      style={{ margin: `10px`, padding: `10px` }}
-                    &gt;
-                      &lt;h3&gt;
-                        &lt;Link
-                          style={{ boxShadow: `none` }}
-                          to={`/blog/${node.slug}`}
-                        &gt;
-                          {title}
-                        &lt;/Link&gt;
-                      &lt;/h3&gt;
-                      &lt;small&gt;{node.date}&lt;/small&gt;
-                      &lt;div
-                        dangerouslySetInnerHTML={{ __html: node.meta_description }}
-                      /&gt;
-                    &lt;/div&gt;
-                  )
-                })}
-              &lt;/div&gt;
-            &lt;/div&gt;
-          &lt;/Layout&gt;
-        )
-      }
-    }
-    
-    export default BlogIndex
-    
-    export const pageQuery = graphql`
-      query {
-        site {
-          siteMetadata {
-            title
-          }
-        }
-        allButterPost {
-          edges {
-            node {
-              id
-              seo_title
-              meta_description
-              slug
-              categories {
-                name
-                slug
-              }
-              author {
-                first_name
-                last_name
-                email
-                slug
-                bio
-                title
-                linkedin_url
-                facebook_url
-                instagram_url
-                pinterest_url
-                twitter_handle
-                profile_image
-              }
-              body
-            }
-          }
-        }
-      }
-    `
-    
+Since MDX posts are being sourced outside of `src/pages`, each post needs to be given a slug which tells Gatsby the URL to render to.
 
-## Creating a blog template
+If you want to set the URLs in your frontmatter, you can skip this step.
 
-Now we've listed our blog posts in `src/pages/blog.js`, using gatsby [createpages](/docs/node-apis/#createPages) API we would generate blog post pages using a template:
+```javascript:title=gatsby-node.js const { createFilePath } = require("gatsby-source-filesystem")
 
-```jsx:title=src/pages/template/blog-post.js import React from "react" import { Link, graphql } from "gatsby"
+exports.onCreateNode = ({ node, actions, getNode }) => { const { createNodeField } = actions
 
-import Bio from "../components/Bio" import Layout from "../components/Layout" import SEO from "../components/seo"
+// We only want to operate on `Mdx` nodes. If we had content from a // remote CMS we could also check to see if the parent node was a // `File` node here if (node.internal.type === "Mdx") { const value = createFilePath({ node, getNode })
 
-class BlogPostTemplate extends React.Component { render() { const post = this.props.data.allButterPost.edges[0].node const siteTitle = this.props.data.site.siteMetadata.title const { previous, next } = this.props.pageContext
-
-    return (
-      <Layout location={this.props.location} title={siteTitle}>
-        <SEO title={post.seo_title} description={post.description} />
-        <div
-          style={{
-            display: `flex`,
-            alignItems: `center`,
-            justifyContent: `center`,
-            margin: `20px 0px 20px 0px`,
-          }}
-        >
-          <div style={{ maxWidth: `960px`, padding: `30px` }}>
-            <h1>{post.seo_title}</h1> <span>{post.date}</span> &bull;
-            {post.categories.map(category => (
-              <span>{category.name}</span>
-            ))}
-            <hr />
-            <div
-              style={{ paddingTop: `20px` }}
-              dangerouslySetInnerHTML={{ __html: post.body }}
-            />
-            <hr />
-            <Bio />
-            <ul
-              style={{
-                display: `flex`,
-                flexWrap: `wrap`,
-                justifyContent: `space-between`,
-                listStyle: `none`,
-                padding: 0,
-              }}
-            >
-              <li>
-                {previous && (
-                  <Link to={`/blog/${previous.slug}`} rel="prev">
-                    ← {previous.seo_title}
-                  </Link>
-                )}
-              </li>
-              <li>
-                {next && (
-                  <Link to={`/blog/${next.slug}`} rel="next">
-                    {next.seo_title} →
-                  </Link>
-                )}
-              </li>
-            </ul>
-          </div>
-        </div>
-      </Layout>
-    )
+    createNodeField({
+      // Name of the field you are adding
+      name: "slug",
+      // Individual MDX node
+      node,
+      // Generated value based on filepath with "blog" prefix. We
+      // don't need a separating "/" before the value because
+      // createFilePath returns a path with the leading "/".
+      value: `/blog${value}`,
+    })
     
 
 } }
 
-export default BlogPostTemplate
-
-export const pageQuery = graphql`query BlogPostBySlug($slug: String!) {
-    site {
-      siteMetadata {
-        title
-        author
-      }
-    }
-    allButterPost(filter: { slug: { eq: $slug } }) {
-      edges {
-        node {
-          id
-          body
-          seo_title
-          date
-          categories {
-            name
+    <br />The `value` in the `createNodeField` call is the URL we'll use later
+    to set up our page. `/blog${value}` is a [template
+    string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals)
+    that will result in:
+    
+    - blog-1.mdx =&gt; localhost:8000/blog/blog-1/
+    - blog-2.mdx =&gt; localhost:8000/blog/blog-2/
+    
+    [`createFilePath`](https://www.gatsbyjs.org/packages/gatsby-source-filesystem/?=gatsby-source#createfilepath)
+    is a function from `gatsby-source-filesystem` that translates file
+    paths to usable URLs.
+    
+    [`onCreateNode`](https://www.gatsbyjs.org/docs/node-apis/#onCreateNode)
+    is a Gatsby lifecycle method that gets called whenever a new node is
+    created. In this case only `Mdx` nodes are touched.
+    
+    ## Create pages from sourced MDX files
+    
+    In order to create pages from the sourced MDX files, you need
+    to construct a query that finds all MDX nodes and pulls out
+    the `slug` field added earlier.
+    
+    &gt; **NOTE**: You can open up a GraphiQL console for query testing
+    &gt; in your browser at &lt;http://localhost:8000/___graphql&gt;
+    
+    ```graphql
+    query {
+      allMdx {
+        edges {
+          node {
+            id
+            fields {
+              # Slug field created in the last section
+              slug
+            }
           }
         }
       }
     }
-  }`
+    
 
-    <br />## Generate Blog Pages
-    
-    Now we'll use the blog template defined in `src/templates/blog-post.js` to generate blog pages.
-    
-    ```javascript:title=gatsby-node.js
-    const path = require(`path`)
-    
-    exports.createPages = async ({ graphql, actions }) =&gt; {
-      const { createPage } = actions
-    
-      const blogPost = path.resolve(`./src/templates/blog-post.js`)
-    
-      let posts
-      try {
-        posts = await graphql(`
-          {
-            allButterPost {
-              edges {
-                node {
-                  id
-                  seo_title
-                  slug
-                  categories {
-                    name
-                    slug
-                  }
-                  author {
-                    first_name
-                    last_name
-                    email
-                    slug
-                    profile_image
-                  }
-                  body
-                }
-              }
+If you skipped the last step and want to use frontmatter for your slugs instead of the generated field, replace `fields` with `frontmatter`.
+
+```javascript:title=gatsby-node.js const path = require("path")
+
+exports.createPages = async ({ graphql, actions, reporter }) => { // Destructure the createPage function from the actions object const { createPage } = actions
+
+const result = await graphql(`query {
+      allMdx {
+        edges {
+          node {
+            id
+            fields {
+              slug
             }
           }
-        `)
-      } catch (error) {
-        console.log(`Error Running Querying Posts`, error)
+        }
       }
+    }`)
+
+if (result.errors) { reporter.panicOnBuild('🚨 ERROR: Loading "createPages" query') }
+
+// Create blog post pages. const posts = result.data.allMdx.edges
+
+// We'll call `createPage` for each result posts.forEach(({ node }, index) => { createPage({ // This is the slug we created before // (or `node.frontmatter.slug`) path: node.fields.slug, // This component will wrap our MDX content component: path.resolve(`./src/components/posts-page-layout.js`), // We can use the values in this context in // our page layout component context: { id: node.id }, }) }) }
+
+    <br />For further reading, check out the
+    [createPages](https://www.gatsbyjs.org/docs/node-apis/#createPages)
+    API.
     
-      posts = posts.data.allButterPost.edges;
+    ## Make a template for your posts
     
-      posts.forEach((post, index) =&gt; {
-        const previous = index === posts.length - 1 ? null : posts[index + 1].node
-        const next = index === 0 ? null : posts[index - 1].node
+    Make a file called `posts-page-layout.js` in `src/components`. This component
+    will be rendered as the template for all posts. There's a component,
+    `MDXRenderer` which is used by `gatsby-plugin-mdx` that will be used to render any
+    programmatically accessed MDX content.
+    
+    First, create a component that accepts the queried MDX data (which will be
+    added in the next step).
+    
+    ```javascript:title=src/components/posts-page-layout.js
+    import React from "react"
+    import { graphql } from "gatsby"
+    import { MDXRenderer } from "gatsby-plugin-mdx"
+    
+    export default function PageTemplate({ data: { mdx } }) {
+      return (
+        &lt;div&gt;
+          &lt;h1&gt;{mdx.frontmatter.title}&lt;/h1&gt;
+          &lt;MDXRenderer&gt;{mdx.body}&lt;/MDXRenderer&gt;
+        &lt;/div&gt;
+      )
     }
     
 
-## Categories, Tags, and Authors
+Then, write a query that uses `id` which is passed through the `context` object in `createPage`. GraphQL requires you to declare the type of arguments at the top of the query before they're used.
 
-Use Butter's APIs for categories, tags, and authors to feature and filter content on your blog. See their [API reference](https://buttercms.com/docs/api/) for more information about these objects:
+```javascript:title=src/components/posts-page-layout.js export const pageQuery = graphql`query BlogPostQuery($id: String) {
+    mdx(id: { eq: $id }) {
+      id
+      body
+      frontmatter {
+        title
+      }
+    }
+  }`
 
-## Easy as Butter
+    <br />When we put the component and page query all together, the
+    component should look like:
+    
+    ```javascript:title=src/components/posts-page-layout.js
+    import React from "react"
+    import { graphql } from "gatsby"
+    import { MDXRenderer } from "gatsby-plugin-mdx"
+    
+    export default function PageTemplate({ data: { mdx } }) {
+      return (
+        &lt;div&gt;
+          &lt;h1&gt;{mdx.frontmatter.title}&lt;/h1&gt;
+          &lt;MDXRenderer&gt;{mdx.body}&lt;/MDXRenderer&gt;
+        &lt;/div&gt;
+      )
+    }
+    
+    export const pageQuery = graphql`
+      query BlogPostQuery($id: String) {
+        mdx(id: { eq: $id }) {
+          id
+          body
+          frontmatter {
+            title
+          }
+        }
+      }
+    `
+    
 
-This was an example meant to help you understand how ButterCMS works with Gatsby. You're now able to:
+That's it, you're done. Run `gatsby develop` and enjoy your new MDX powers.
 
-- Create a ButterCMS repository and setting it up together with the Gatsby plugin
-- Query data from ButterCMS for single pages, multiple pages, blog posts, and custom content fields
+Now you have all the pieces you need to programmatically create pages with Gatsby and `gatsby-plugin-mdx`. Check out our other guides to find out more about all of the cool stuff you can do with `gatsby-plugin-mdx`.
 
-If you got stuck, you can compare your code to the [gatsby-starter-buttercms](https://github.com/ButterCMS/gatsby-starter-buttercms). To learn more about ButterCMS, check out their [blog](https://buttercms.com/blog/). Their latest updates can be found [here](https://buttercms.com/blog/category/new-to-butter/).
+## Bonus: Make a Blog Index
+
+```javascript:title=src/pages/index.js import React from "react" import { Link, graphql } from "gatsby"
+
+const BlogIndex = ({ data }) => { const { edges: posts } = data.allMdx
+
+return ( 
+
+<div>
+  <h1>
+    Awesome MDX Blog
+  </h1></p> 
+  
+  <pre><code>  &lt;ul&gt;
+    {posts.map(({ node: post }) =&gt; (
+      &lt;li key={post.id}&gt;
+        &lt;Link to={post.fields.slug}&gt;
+          &lt;h2&gt;{post.frontmatter.title}&lt;/h2&gt;
+        &lt;/Link&gt;
+        &lt;p&gt;{post.excerpt}&lt;/p&gt;
+      &lt;/li&gt;
+    ))}
+  &lt;/ul&gt;
+&lt;/div&gt;
+</code></pre>
+  
+  <p>
+    ) }
+  </p>
+  
+  <p>
+    export const pageQuery = graphql<code>query blogIndex {
+    allMdx {
+      edges {
+        node {
+          id
+          excerpt
+          frontmatter {
+            title
+          }
+          fields {
+            slug
+          }
+        }
+      }
+    }
+  }</code>
+  </p>
+  
+  <p>
+    export default BlogIndex ```
+  </p>
