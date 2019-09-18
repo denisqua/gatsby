@@ -1,194 +1,123 @@
 ---
-title: Markdown-Syntax
+title: Querying with Sift
 ---
 
-Markdown is a very common way to write content in Gatsby posts and pages. This guide contains tips for Markdown syntax and formatting that might come in handy!
+> This documentation isn't up to date with latest [schema customization changes](/docs/schema-customization). Help Gatsby by making a PR to [update this documentation](https://github.com/gatsbyjs/gatsby/issues/14228)!
 
-## Headings
+## Summary
 
-    # heading 1
-    ## heading 2
-    ### heading 3
-    #### heading 4
-    ##### heading 5
-    ###### heading 6
-    
+Gatsby stores all data loaded during the source-nodes phase in Redux. And it allows you to write GraphQL queries to query that data. But Redux is a plain JavaScript object store. So how does Gatsby query over those nodes using the GraphQL query language?
 
-Here's how those tags render in HTML:
+The answer is that it uses the [sift.js](https://github.com/crcn/sift.js/tree/master) library. It is a port of the MongoDB query language that works over plain JavaScript objects. It turns out that mongo's query language is very compatible with GraphQL.
 
-# heading 1
+Most of the logic below is in the [run-sift.js](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/redux/run-sift.js) file, which is called from the [ProcessedNodeType `resolve()`](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/schema/build-node-types.js#L191) function.
 
-## heading 2
+## ProcessedNodeType Resolve Function
 
-### heading 3
+Remember, at the point this resolve function is created, we have been iterating over all the distinct `node.internal.type`s in the redux `nodes` namespace. So for instance we might be on the `MarkdownRemark` type. Therefore the `resolve()` function closes over this type name and has access to all the nodes of that type.
 
-#### heading 4
+The `resolve()` function calls `run-sift.js`, and provides it with the following arguments:
 
-##### heading 5
+- GraphQLArgs (as JavaScript object). Within a filter. E.g `wordcount: { paragraphs: { eq: 4 } }`
+- All nodes in redux of this type. E.g where `internal.type == MmarkdownRemark'`
+- Context `path`, if being called as part of a [page query](/docs/query-execution/#query-queue-execution)
+- typeName. E.g `markdownRemark`
+- gqlType. See [more on gqlType](/docs/schema-gql-type)
 
-###### heading 6
+For example:
 
-- each heading gets converted to their HTML equivalent 
-  - i.e. `# heading 1` is `<h1>heading 1</h1>`
-- Correct usage of each heading should follow the [accessibility guidelines](https://www.w3.org/WAI/tutorials/page-structure/headings/) set by the World Wide Web Consortium (W3C) *Note: in the [Gatsby docs](/contributing/docs-contributions#headings), h1s are already included from `title` entries in frontmatter metadata, and contributions in Markdown should begin with h2.*
+```javascript
+runSift({
+  args: {
+    filter: { // Exact args from GraphQL Query
+      wordcount: {
+        paragraphs: {
+          eq: 4
+        }
+      }
+    }
+  },
+  nodes: ${latestNodes},
+  path: context.path, // E.g /blogs/my-blog
+  typeName: `markdownRemark`,
+  type: ${gqlType}
+})
+```
 
-## Emphasized text
+## Run-sift.js
 
-- Italic 
-  - one asterisk or one underscore 
-    - `*italic*` or `_italic_`
-    - *italic!*
-- Bold 
-  - two asterisks or two underscores 
-    - `**bold**` or `__bold__`
-    - **bold!**
-- Italic and Bold
-  
-  - three asterisks or three underscore 
-    - `***italic and bold***` or `___italic and bold___`
-    - ***italic and bold!!***
+This file converts GraphQL Arguments into sift queries and applies them to the collection of all nodes of this type. The rough steps are:
 
-## Lists
+1. Convert query args to sift args
+2. Drop leaves from args
+3. Resolve inner query fields on all nodes
+4. Track newly realized fields
+5. Run sift query on all nodes
+6. Create Page dependency if required
 
-### Unordered
+### 1. Convert query args to sift args
 
-- can use `*`, `-`, or `+` for each list item
+Sift expects all field names to be prepended by a `$`. The [siftifyArgs](https://github.com/gatsbyjs/gatsby/blob/6dc8a14f8efc78425b1f225901dce7264001e962/packages/gatsby/src/redux/run-sift.js#L39) function takes care of this. It descends the args tree, performing the following transformations for each field key/value scenario.
 
-    * Gatsby
-      * docs
-    - Gatsby
-      - docs
-    + Gatsby
-      + docs
-    
+- field key is`elemMatch`? Change to `$elemMatch`. Recurse on value object
+- field value is regex? Apply regex cleaning
+- field value is glob, use [minimatch](https://www.npmjs.com/package/minimatch) library to convert to Regex
+- normal value, prepend `$` to field name.
 
-How unordered lists are rendered in HTML:
+So, the above query would become:
 
-- Gatsby
-  
-  - docs
-- Gatsby
-  
-  - docs
-- Gatsby
-  
-  - docs
+```javascript
+{
+  `$wordcount`: {
+    `$paragraphs`: {
+      `$eq`: 4
+    }
+  }
+}
+```
 
-### Ordered
+### 2. Drop leaves (e.g `{eq: 4}`) from args
 
-- number and period for each list item
-- using `1.` for each item can automatically increment depending on the content
+To assist in step 3, we create a version of the siftified args called `fieldsToSift` that has all leaves of the args tree replaced with boolean `true`. This is handled by the [extractFieldsToSift](https://github.com/gatsbyjs/gatsby/blob/6dc8a14f8efc78425b1f225901dce7264001e962/packages/gatsby/src/redux/run-sift.js#L65) function. `fieldsToSift` would look like this after the function is applied:
 
-      1. One
-      1. Two
-      1. Three
-    
+```javascript
+{
+  `wordcount`: {
+    `paragraphs`: true
+  }
+}
+```
 
-1. One
-2. Two
-3. Three
+### 3. Resolve inner query fields on all nodes
 
-## Links and Images
+Step 4 will perform the actual sift query over all the nodes, returning the first one that matches the query. But we must remember that the nodes that are in redux only include data that was explicitly created by their source or transform plugins. If instead of creating a data field, a plugin used `setFieldsOnGraphQLNodeType` to define a custom field, then we have to manually call that field's resolver on each node. The args in step 2 is a great example. The `wordcount` field is defined by the [gatsby-transformer-remark](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby-transformer-remark/src/extend-node-type.js#L416) plugin, rather than created during the creation of the remark node.
 
-### Link
+The [nodesPromise](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/redux/run-sift.js#L168) function iterates over all nodes of this type. Then, for each node, [resolveRecursive](https://github.com/gatsbyjs/gatsby/blob/6dc8a14f8efc78425b1f225901dce7264001e962/packages/gatsby/src/redux/run-sift.js#L135) descends the `siftToFields` tree, getting the field name, and then finding its gqlType, and then calling that type's `resolve` function manually. E.g, for the above example, we would find the gqlField for `wordcount` and call its resolve field:
 
-Links in Markdown use this format. URLs can be relative or remote:
+```javascript
+markdownRemarkGqlType.resolve(node, {}, {}, { fieldName: `wordcount` })
+```
 
-    [Text](url)
-    
+Note that the graphql-js library has NOT been invoked yet. We're instead calling the appropriate gqlType resolve function manually.
 
-Example of a link rendering in HTML:
+The resolve method in this case would return a paragraph node, which also needs to be properly resolved. So We descend the `fieldsToSift` arg tree and perform the above operation on the paragraph node (using the found paragraph gqlType).
 
-[Gatsby site](https://www.gatsbyjs.org/)
+After `resolveRecursive` has finished, we will have "realized" all the query fields in each node, giving us confidence that we can perform the query with all the data being there.
 
-### Image with alt text
+### 4. Track newly realized fields
 
-    ![alt text](path-to-image)
-    
+Since new fields on the node may have been created in this process, we call `trackInlineObjectsInRootNode()` to track these new objects. See [Node Tracking](/docs/node-tracking/) docs for more.
 
-### Image without alt text
+### 5. Run sift query on all nodes
 
-This pattern is appropriate for [decorative or repetitive images](https://www.w3.org/WAI/tutorials/images/decision-tree/):
+Now that we've realized all fields that need to be queried, on all nodes of this type, we are finally ready to apply the sift query. This step is handled by [tempPromise](https://github.com/gatsbyjs/gatsby/blob/master/packages/gatsby/src/redux/run-sift.js#L214). It simply concatenates all the top level objects in the args tree together with a sift `$and` expression, and then iterates over all nodes returning the first one that satisfies the sift expression.
 
-    ![](path-to-image)
-    
+In the case that `connection === true` (argument passed to run-sift), then instead of just choosing the first argument, we will select ALL nodes that match the sift query. If the GraphQL query specified `sort`, `skip`, or `limit` fields, then we use the [graphql-skip-limit](https://www.npmjs.com/package/graphql-skip-limit) library to filter down to the appropriate results. See [Schema Connections](/docs/schema-connections) for more info.
 
-## Blockquote
+### 6. Create Page dependency if required
 
-- Use `>` to declare a blockquote
-- Adding multiple `>` with create nested blockquotes
-- It is recommended to place `>` before each line
-- You can use other Markdown syntax inside blockquotes
+Assuming we find a node (or multiple if `connection` === true), we finish off by recording the page that initiated the query (in the `path` field) depends on the found node. More on this in [Page -> Node Dependencies](/docs/page-node-dependencies/).
 
-    > blockquote
-    >
-    > > nested blockquote
-    >
-    > > **I'm bold!**
-    >
-    > more quotes
-    
+## Note about plugin resolver side effects
 
-> Blockquote
-> 
-> > nested blockquote
-> > 
-> > **I'm bold!**
-> 
-> more quotes
-
-## Code Comments
-
-### Inline
-
-- Enclose the text in backticks `code`
-- Inline `code` looks like this sentence
-
-### Code Blocks
-
-- Indent a block by four spaces
-
-## MD vs MDX
-
-- MDX is a superset of Markdown. It allows you to write JSX inside markdown. This includes importing and rendering React components!
-
-## Processing Markdown and MDX in Gatsby:
-
-- In order to process and use Markdown or MDX in Gatsby, you can use the [gatsby-source-filesystem](/docs/sourcing-from-the-filesystem) plugin
-- You can check out the package [README](/packages/gatsby-source-filesystem) for more information on how it works!
-
-## Frontmatter
-
-- Metadata for your Markdown
-- Variables that can later be injected into your components
-- Must be: 
-  - At the top of the file
-  - Valid YAML
-  - Between triple dashed lines
-
-      ---
-      title: My Frontmatter Title
-      example_boolean: true
-      ---
-      ```
-    
-    ## Frontmatter + MDX Example
-    
-    
-
-* * *
-
-## description: A simple example of a description in frontmatter
-
-import { Chart } from '../components/chart'
-
-# Here’s a chart
-
-The chart is rendered inside our MDX document.
-
-<chart description={description} /> ```
-
-## Helpful Resources
-
-- https://daringfireball.net/projects/markdown/syntax
-- https://www.markdownguide.org/basic-syntax
+As [mentioned above](#3-resolve-inner-query-fields-on-all-nodes), `run-sift` must "realize" all query fields before querying over them. This involves calling the resolvers of custom plugins on **each node of that type**. Therefore, if a resolver performs side effects, then these will be triggered, regardless of whether the field result actually matches the query.
