@@ -1,90 +1,212 @@
 ---
-title: Scaling Issues
+title: Writing Pages in MDX
 ---
 
-In certain circumstances, your application may hit some scaling issues that necessitate workarounds. These workarounds should be treated as *temporary* and should be revisited in the future as Gatsby scales to support larger applications with hundreds of thousands of pages.
+After [installing](/docs/mdx/getting-started) `gatsby-plugin-mdx`, MDX files located in `src/pages` will turn into pages.
 
-However -- until we get to that point, some workarounds are useful to consider if they unblock your team from deploying, developing, etc.
+Pages are rendered at a URL that is constructed from the filesystem path inside `src/pages`. An MDX file at `src/pages/awesome.mdx` will result in a page being rendered at `mysite.com/awesome`.
 
-> Just looking for possible solutions? [Jump ahead](#possible-solutions-to-scaling-issues)
+> `gatsby-plugin-mdx` looks for MDX files and automatically transpiles them so that Gatsby internals can render them.
 
-## What is a scaling issue?
+## Using frontmatter in MDX
 
-A scaling issue is evident if your application is unable to build due to an error *or* if it is extremely slow in some lifecycle, e.g. `develop` or `build`. For example:
+By default, `gatsby-plugin-mdx` supports [frontmatter](/docs/adding-markdown-pages/#frontmatter-for-metadata-in-markdown-files) so you can define things like titles and paths to use in your GraphQL queries. You can declare frontmatter at the beginning of your MDX document:
 
-- An "Out of Memory" occurs when building in CI
-- The `develop` lifecycle takes 10x as long as `build`
+```mdx
+---
+title: Hello, world!
+path: /hello-world
+date: 2019-01-29
+---
 
-and more. An example of a scaling error thrown to the console may look something like:
-
-```shell
-success open and validate gatsby-configs — 0.005 s
-success load plugins — 0.131 s
-success onPreInit — 0.283 s
-success initialize cache — 0.026 s
-success copy gatsby files — 0.071 s
-success onPreBootstrap — 0.009 s
-success source and transform nodes — 5.291 s
-success building schema — 0.623 s
-success createPages — 0.608 s
-success createPagesStatefully — 0.025 s
-success onPreExtractQueries — 0.000 s
-success update schema — 0.478 s
-success extract queries from components — 0.127 s
-⠄ run graphql queries — 310/728 2.51 queries/second
-<--- Last few GCs --->
-
-[10208:0000029380BC1810]   139036 ms: Scavenge 1374.2 (1423.1) -> 1373.3 (1424.1) MB, 2.2 / 0.0 ms  (average mu = 0.317, current mu = 0.262) allocation failure
-[10208:0000029380BC1810]   139039 ms: Scavenge 1374.3 (1424.1) -> 1373.5 (1424.6) MB, 2.0 / 0.0 ms  (average mu = 0.317, current mu = 0.262) allocation failure
-[10208:0000029380BC1810]   139043 ms: Scavenge 1374.4 (1424.6) -> 1373.6 (1425.1) MB, 2.1 / 0.0 ms  (average mu = 0.317, current mu = 0.262) allocation failure
+# Hello, world!
 ```
 
-## When can a scaling issue arise?
+Which can then be [queried with GraphQL](/docs/querying-with-graphql/):
 
-A scaling issue *can* arise in varied cases, but typically something like:
-
-- A Gatsby application with ~100K+ pages 
-  - See [this issue](https://github.com/gatsbyjs/gatsby/issues/12343) for an example
-- Extremely large `json` files sourced with `gatsby-transformer-json`
-- Extremely large GraphQL queries, which are stored in memory in the `develop` lifecycle 
-  - See [this issue](https://github.com/gatsbyjs/gatsby/issues/12566) for an example
-
-If you are seeing errors or slowness **and** your Gatsby app matches one of the above use-cases, it's very likely you are hitting some scaling issues.
-
-## Possible solutions to scaling issues
-
-It's difficult to pin down exactly *how* to fix a scaling issue. We have some recommendations and workarounds that *may* work for your application.
-
-Note: the application of these techniques should be considered analogous to a applying a bandage. A bandage solves the underlying issue, but at some indeterminate point in the future the underlying issue may be healed! In much the same way--treat these techniques as temporary and re-visit in the future if underlying scaling issues in Gatsby have since been resolved.
-
-### `GATSBY_DB_NODES`
-
-In preparation for future versions of Gatsby, we've enabled **experimental** support for a different mechanism for the persistence of nodes: [Loki](https://www.npmjs.com/package/lokijs). It's challenging to assess whether this could lead to unforeseen issues without breaking changes, so we've exposed it behind a flag while we continue to assess the impact to Gatsby applications.
-
-Loki allows us to opt-in to possibly more performant internal operations and it *may* resolve your scaling issues. If it does--please let us know! To opt-in to this experimental feature:
-
-```json
-{
-  "devDependencies": {
-    "cross-env": "^5.2.0"
-  },
-  "scripts": {
-    "build": "cross-env GATSBY_DB_NODES=loki gatsby build"
+```graphql
+query {
+  allMdx {
+    edges {
+      node {
+        frontmatter {
+          title
+          path
+          date(formatString: "MMMM DD, YYYY")
+        }
+      }
+    }
   }
 }
 ```
 
-### Switch off type inference for `SitePage.context`
+> **Note:** To query `Mdx` content, it must be included in the node system using a source like the `gatsby-source-filesystem` plugin first. Instructions for sourcing content from somewhere like your `/src/pages` directory can be found on the [plugin's README](/packages/gatsby-source-filesystem/).
 
-When using the `createPages` API to pass large amounts of data to pages via `context` (which is generally not recommended), Gatsby's type inference can become slow. In most cases, it is not actually necessary to include the `SitePage.context` field in the GraphQL schema, so switching off type inference for the `SitePage` type should be safe:
+Frontmatter is also available in `props.pageContext.frontmatter` and can be accessed in blocks of JSX in your MDX document:
 
-```js
-// gatsby-node.js
-exports.createSchemaCustomization = ({ actions }) => {
-  actions.createTypes(`
-    type SitePage implements Node @dontInfer {
-      path: String!
+```mdx
+---
+title: Building with Gatsby
+author: Jay Gatsby
+---
+
+<h1>{props.pageContext.frontmatter.title}</h1>
+
+<span>{props.pageContext.frontmatter.author}</span>
+
+(Blog post content, components, etc.)
+```
+
+## Importing JSX components and MDX documents
+
+Similarly to what you'd do in plain React, you can import and render JSX components directly in MDX files. You can also import other MDX documents.
+
+```mdx:title=src/pages/chart.mdx import { Chart } from "../components/chart" import FAQ from "../components/faq.mdx"
+
+# Here’s a chart
+
+The chart is rendered inside our MDX document.
+
+<Chart />
+
+<FAQ />
+
+    <br />The `&lt;Chart /&gt;` component coming from a `.js` file would be written like any
+    other React component, while the `&lt;FAQ /&gt;` component coming from an `.mdx`
+    file might look something like this:
+    
+    <!-- prettier-ignore -->
+    ```mdx:title=src/components/faq.mdx
+    ## Frequently Asked Questions
+    
+    ### Why Gatsby?
+    
+    Gatsby delivers faster, more secure sites and apps from a variety of data 
+    sources
+    
+    ### Where do I start?
+    
+    The documentation offers guides for all different skill levels, you can 
+    find more info at the Gatsby's [Quick Start page](https://www.gatsbyjs.org/docs/quick-start)
+    
+    &lt;!-- This default export overrides the default layout ensuring --&gt;
+    &lt;!--  that the FAQ component isn't wrapped by other elements --&gt;
+    export default ({ children }) =&gt; (
+      &lt;&gt;
+        {children}
+      &lt;/&gt;
+    )
+    
+
+> **Note**: the default export concept used in this code block is explained in more detail in the docs below on [defining layouts](#defining-a-layout)
+
+## Combining frontmatter and imports
+
+If you would like to include frontmatter metadata *and* import components, the frontmatter needs to appear at the top of the file and then imports can follow:
+
+```mdx
+---
+title: Building with Gatsby
+---
+
+import { Chart } from "../components/chart"
+
+Markdown and more content...
+```
+
+## Using JavaScript exports
+
+MDX supports `export` syntax as well, which enables specific use cases like providing data for queries and rendering or overriding the default layout on MDX documents. You don't need to export MDX documents to import them in other files.
+
+### Exporting page metadata
+
+You can provide additional data about a given document by exporting. `gatsby-plugin-mdx` will automatically add it to the GraphQL schema so you can use the exported data in your queries and in rendering.
+
+Data exported in MDX documents in this manner is also made available on the variable name you've assigned it.
+
+You can export variables, objects, or other data structures:
+
+<!-- prettier-ignore -->
+
+```mdx
+export const metadata = {
+  name: "World",
+  path: "/world",
+};
+
+# Hello, <span children={metadata.name} /> 
+
+The span above will read: "Hello, World".
+
+<!-- you can also use other variables or data structures -->
+export const names = ["Abdullah", "Adam", "Alice", "Aida"]
+
+<ul>{names.map(name => <li>{name}</li>)}</ul>
+```
+
+The fields `name` and `path` defined on `metadata` could now alternatively be accessed on MDX nodes in other areas of your Gatsby project by a GraphQL query like this (this query fetches all MDX nodes and the data exports associated with them):
+
+```graphql
+query MdxExports {
+  allMdx {
+    nodes {
+      exports {
+        metadata {
+          name
+          path
+        }
+      }
     }
-  `)
+  }
 }
+```
+
+### Defining a layout
+
+If you have [provided a default layout](/packages/gatsby-plugin-mdx/?=mdx#default-layouts) in your `gatsby-config.js` through the `gatsby-plugin-mdx` plugin options, the exported component you define from this file will replace the default.
+
+<!-- prettier-ignore --> ```mdx:title=src/pages/layout-example.mdx import PurpleBorder from "../components/purple-border"
+
+# This will have a purple border
+
+export default PurpleBorder
+
+    <br />The `&lt;PurpleBorder /&gt;` component might look something like this, wrapping the MDX
+    document in a `&lt;div&gt;` with a 1px purple border:
+    
+    ```jsx:title=src/components/purple-border.js
+    import React from "react"
+    
+    const PurpleBorder = ({ children }) =&gt; (
+      &lt;div style={{ border: "1px solid rebeccapurple" }}&gt;{children}&lt;/div&gt;
+    )
+    
+    export default PurpleBorder
+    
+
+## GraphQL Queries
+
+You can fetch data to use in your MDX file by exporting a `pageQuery` in the same way you would for a `.js` page. The queried data is passed as a prop, and can be accessed inside any JSX block when writing in MDX:
+
+<!-- prettier-ignore -->
+
+```mdx
+import { graphql } from "gatsby"
+
+# My Awesome Page
+
+Here's a paragraph, followed by a paragraph with data!
+
+<p>{props.data.site.siteMetadata.description}</p>
+
+export const pageQuery = graphql`
+  query {
+    site {
+      siteMetadata {
+        description
+        title
+      }
+    }
+  }
+`
 ```
