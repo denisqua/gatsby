@@ -1,5 +1,5 @@
 ---
-title: Markdown Syntax
+title: Markdown-Syntax
 ---
 
 Markdown is a very common way to write content in Gatsby posts and pages. This guide contains tips for Markdown syntax and formatting that might come in handy!
