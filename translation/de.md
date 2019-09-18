@@ -1,289 +1,90 @@
 ---
-title: Programmatically Creating Pages
+title: Scaling Issues
 ---
 
-Sometimes you want to be able to programmatically access data from files in `src/pages/` or create pages using MDX content that lives at arbitrary locations outside of `src/pages/` or in remote CMSes.
+In certain circumstances, your application may hit some scaling issues that necessitate workarounds. These workarounds should be treated as *temporary* and should be revisited in the future as Gatsby scales to support larger applications with hundreds of thousands of pages.
 
-For instance, let's say you have a Gatsby website, and you want to add support for MDX so you can start your blog. The posts will live in `content/posts/`. You can do this with the help of `gatsby-source-filesystem` and [`createPages`](/docs/node-apis/#createPages) in `gatsby-node.js`.
+However -- until we get to that point, some workarounds are useful to consider if they unblock your team from deploying, developing, etc.
 
-## Source MDX pages from the filesystem
+> Just looking for possible solutions? [Jump ahead](#possible-solutions-to-scaling-issues)
 
-To let Gatsby know that you'll be working with MDX content you need to add `gatsby-plugin-mdx` to the plugins array in your `gatsby-config.js` file.
+## What is a scaling issue?
 
-You'll need to use `gatsby-source-filesystem` and tell it to source "posts" from a folder called `content/posts` located in the project's root.
+A scaling issue is evident if your application is unable to build due to an error *or* if it is extremely slow in some lifecycle, e.g. `develop` or `build`. For example:
 
-> **NOTE**: `gatsby-plugin-mdx` uses `.mdx` by default as a file extension to recognize which files to use. You can also [use `.md` as a file extension](/packages/gatsby-plugin-mdx#extensions) if you want.
+- An "Out of Memory" occurs when building in CI
+- The `develop` lifecycle takes 10x as long as `build`
 
-```javascript:title=gatsby-config.js module.exports = { plugins: [ // Add support for *.mdx files in gatsby "gatsby-plugin-mdx",
+and more. An example of a scaling error thrown to the console may look something like:
 
-    // Add a collection called "posts" that looks
-    // for files in content/posts/
-    {
-      resolve: "gatsby-source-filesystem",
-      options: {
-        name: "posts",
-        path: `${__dirname}/content/posts/`,
-      },
-    },
-    
+```shell
+success open and validate gatsby-configs — 0.005 s
+success load plugins — 0.131 s
+success onPreInit — 0.283 s
+success initialize cache — 0.026 s
+success copy gatsby files — 0.071 s
+success onPreBootstrap — 0.009 s
+success source and transform nodes — 5.291 s
+success building schema — 0.623 s
+success createPages — 0.608 s
+success createPagesStatefully — 0.025 s
+success onPreExtractQueries — 0.000 s
+success update schema — 0.478 s
+success extract queries from components — 0.127 s
+⠄ run graphql queries — 310/728 2.51 queries/second
+<--- Last few GCs --->
 
-], }
+[10208:0000029380BC1810]   139036 ms: Scavenge 1374.2 (1423.1) -> 1373.3 (1424.1) MB, 2.2 / 0.0 ms  (average mu = 0.317, current mu = 0.262) allocation failure
+[10208:0000029380BC1810]   139039 ms: Scavenge 1374.3 (1424.1) -> 1373.5 (1424.6) MB, 2.0 / 0.0 ms  (average mu = 0.317, current mu = 0.262) allocation failure
+[10208:0000029380BC1810]   139043 ms: Scavenge 1374.4 (1424.6) -> 1373.6 (1425.1) MB, 2.1 / 0.0 ms  (average mu = 0.317, current mu = 0.262) allocation failure
+```
 
-    <br />You can read about
-    [`gatsby-source-filesystem`](/packages/gatsby-source-filesystem)
-    if you'd like to learn more.
-    
-    ## Add MDX Files
-    
-    Before you can write any GraphQL queries and programmatically create
-    pages, you need to add some content.
-    
-    Make a folder called `content/posts` and create two files in it called
-    `blog-1.mdx` and `blog-2.mdx`. You can do this on the command line in
-    a terminal by using the following commands from the root of your
-    project.
-    
-    ```shell
-    mkdir -p content/posts
-    touch content/posts/blog-{1,2}.mdx
-    
+## When can a scaling issue arise?
 
-> **NOTE**: `mkdir -p path/to/a/directory` will create every folder in the path if it does not exist.
-> 
-> *`touch <filename>` will create an empty file named `<filename>`. The brackets (`{}`) are [an expansion](https://twitter.com/kentcdodds/status/1083399683932868609?s=19) which means we can create multiple files in one command.*
+A scaling issue *can* arise in varied cases, but typically something like:
 
-Open up each of the files you just created and add some content.
+- A Gatsby application with ~100K+ pages 
+  - See [this issue](https://github.com/gatsbyjs/gatsby/issues/12343) for an example
+- Extremely large `json` files sourced with `gatsby-transformer-json`
+- Extremely large GraphQL queries, which are stored in memory in the `develop` lifecycle 
+  - See [this issue](https://github.com/gatsbyjs/gatsby/issues/12566) for an example
 
-## ```md:title=blog-1.mdx
+If you are seeing errors or slowness **and** your Gatsby app matches one of the above use-cases, it's very likely you are hitting some scaling issues.
 
-## title: "Blog Post 1"
+## Possible solutions to scaling issues
 
-Trying out MDX
+It's difficult to pin down exactly *how* to fix a scaling issue. We have some recommendations and workarounds that *may* work for your application.
 
-    <br />```md:title=blog-2.mdx
-    ---
-    title: "Blog Post 2"
-    ---
-    
-    Gatsby is the best
-    
+Note: the application of these techniques should be considered analogous to a applying a bandage. A bandage solves the underlying issue, but at some indeterminate point in the future the underlying issue may be healed! In much the same way--treat these techniques as temporary and re-visit in the future if underlying scaling issues in Gatsby have since been resolved.
 
-## Generate slugs
+### `GATSBY_DB_NODES`
 
-Since MDX posts are being sourced outside of `src/pages`, each post needs to be given a slug which tells Gatsby the URL to render to.
+In preparation for future versions of Gatsby, we've enabled **experimental** support for a different mechanism for the persistence of nodes: [Loki](https://www.npmjs.com/package/lokijs). It's challenging to assess whether this could lead to unforeseen issues without breaking changes, so we've exposed it behind a flag while we continue to assess the impact to Gatsby applications.
 
-If you want to set the URLs in your frontmatter, you can skip this step.
+Loki allows us to opt-in to possibly more performant internal operations and it *may* resolve your scaling issues. If it does--please let us know! To opt-in to this experimental feature:
 
-```javascript:title=gatsby-node.js const { createFilePath } = require("gatsby-source-filesystem")
+```json
+{
+  "devDependencies": {
+    "cross-env": "^5.2.0"
+  },
+  "scripts": {
+    "build": "cross-env GATSBY_DB_NODES=loki gatsby build"
+  }
+}
+```
 
-exports.onCreateNode = ({ node, actions, getNode }) => { const { createNodeField } = actions
+### Switch off type inference for `SitePage.context`
 
-// We only want to operate on `Mdx` nodes. If we had content from a // remote CMS we could also check to see if the parent node was a // `File` node here if (node.internal.type === "Mdx") { const value = createFilePath({ node, getNode })
+When using the `createPages` API to pass large amounts of data to pages via `context` (which is generally not recommended), Gatsby's type inference can become slow. In most cases, it is not actually necessary to include the `SitePage.context` field in the GraphQL schema, so switching off type inference for the `SitePage` type should be safe:
 
-    createNodeField({
-      // Name of the field you are adding
-      name: "slug",
-      // Individual MDX node
-      node,
-      // Generated value based on filepath with "blog" prefix. We
-      // don't need a separating "/" before the value because
-      // createFilePath returns a path with the leading "/".
-      value: `/blog${value}`,
-    })
-    
-
-} }
-
-    <br />The `value` in the `createNodeField` call is the URL we'll use later
-    to set up our page. `/blog${value}` is a [template
-    string](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals)
-    that will result in:
-    
-    - blog-1.mdx =&gt; localhost:8000/blog/blog-1/
-    - blog-2.mdx =&gt; localhost:8000/blog/blog-2/
-    
-    [`createFilePath`](https://www.gatsbyjs.org/packages/gatsby-source-filesystem/?=gatsby-source#createfilepath)
-    is a function from `gatsby-source-filesystem` that translates file
-    paths to usable URLs.
-    
-    [`onCreateNode`](https://www.gatsbyjs.org/docs/node-apis/#onCreateNode)
-    is a Gatsby lifecycle method that gets called whenever a new node is
-    created. In this case only `Mdx` nodes are touched.
-    
-    ## Create pages from sourced MDX files
-    
-    In order to create pages from the sourced MDX files, you need
-    to construct a query that finds all MDX nodes and pulls out
-    the `slug` field added earlier.
-    
-    &gt; **NOTE**: You can open up a GraphiQL console for query testing
-    &gt; in your browser at &lt;http://localhost:8000/___graphql&gt;
-    
-    ```graphql
-    query {
-      allMdx {
-        edges {
-          node {
-            id
-            fields {
-              # Slug field created in the last section
-              slug
-            }
-          }
-        }
-      }
+```js
+// gatsby-node.js
+exports.createSchemaCustomization = ({ actions }) => {
+  actions.createTypes(`
+    type SitePage implements Node @dontInfer {
+      path: String!
     }
-    
-
-If you skipped the last step and want to use frontmatter for your slugs instead of the generated field, replace `fields` with `frontmatter`.
-
-```javascript:title=gatsby-node.js const path = require("path")
-
-exports.createPages = async ({ graphql, actions, reporter }) => { // Destructure the createPage function from the actions object const { createPage } = actions
-
-const result = await graphql(`query {
-      allMdx {
-        edges {
-          node {
-            id
-            fields {
-              slug
-            }
-          }
-        }
-      }
-    }`)
-
-if (result.errors) { reporter.panicOnBuild('🚨 ERROR: Loading "createPages" query') }
-
-// Create blog post pages. const posts = result.data.allMdx.edges
-
-// We'll call `createPage` for each result posts.forEach(({ node }, index) => { createPage({ // This is the slug we created before // (or `node.frontmatter.slug`) path: node.fields.slug, // This component will wrap our MDX content component: path.resolve(`./src/components/posts-page-layout.js`), // We can use the values in this context in // our page layout component context: { id: node.id }, }) }) }
-
-    <br />For further reading, check out the
-    [createPages](https://www.gatsbyjs.org/docs/node-apis/#createPages)
-    API.
-    
-    ## Make a template for your posts
-    
-    Make a file called `posts-page-layout.js` in `src/components`. This component
-    will be rendered as the template for all posts. There's a component,
-    `MDXRenderer` which is used by `gatsby-plugin-mdx` that will be used to render any
-    programmatically accessed MDX content.
-    
-    First, create a component that accepts the queried MDX data (which will be
-    added in the next step).
-    
-    ```javascript:title=src/components/posts-page-layout.js
-    import React from "react"
-    import { graphql } from "gatsby"
-    import { MDXRenderer } from "gatsby-plugin-mdx"
-    
-    export default function PageTemplate({ data: { mdx } }) {
-      return (
-        &lt;div&gt;
-          &lt;h1&gt;{mdx.frontmatter.title}&lt;/h1&gt;
-          &lt;MDXRenderer&gt;{mdx.body}&lt;/MDXRenderer&gt;
-        &lt;/div&gt;
-      )
-    }
-    
-
-Then, write a query that uses `id` which is passed through the `context` object in `createPage`. GraphQL requires you to declare the type of arguments at the top of the query before they're used.
-
-```javascript:title=src/components/posts-page-layout.js export const pageQuery = graphql`query BlogPostQuery($id: String) {
-    mdx(id: { eq: $id }) {
-      id
-      body
-      frontmatter {
-        title
-      }
-    }
-  }`
-
-    <br />When we put the component and page query all together, the
-    component should look like:
-    
-    ```javascript:title=src/components/posts-page-layout.js
-    import React from "react"
-    import { graphql } from "gatsby"
-    import { MDXRenderer } from "gatsby-plugin-mdx"
-    
-    export default function PageTemplate({ data: { mdx } }) {
-      return (
-        &lt;div&gt;
-          &lt;h1&gt;{mdx.frontmatter.title}&lt;/h1&gt;
-          &lt;MDXRenderer&gt;{mdx.body}&lt;/MDXRenderer&gt;
-        &lt;/div&gt;
-      )
-    }
-    
-    export const pageQuery = graphql`
-      query BlogPostQuery($id: String) {
-        mdx(id: { eq: $id }) {
-          id
-          body
-          frontmatter {
-            title
-          }
-        }
-      }
-    `
-    
-
-That's it, you're done. Run `gatsby develop` and enjoy your new MDX powers.
-
-Now you have all the pieces you need to programmatically create pages with Gatsby and `gatsby-plugin-mdx`. Check out our other guides to find out more about all of the cool stuff you can do with `gatsby-plugin-mdx`.
-
-## Bonus: Make a Blog Index
-
-```javascript:title=src/pages/index.js import React from "react" import { Link, graphql } from "gatsby"
-
-const BlogIndex = ({ data }) => { const { edges: posts } = data.allMdx
-
-return ( 
-
-<div>
-  <h1>
-    Awesome MDX Blog
-  </h1></p> 
-  
-  <pre><code>  &lt;ul&gt;
-    {posts.map(({ node: post }) =&gt; (
-      &lt;li key={post.id}&gt;
-        &lt;Link to={post.fields.slug}&gt;
-          &lt;h2&gt;{post.frontmatter.title}&lt;/h2&gt;
-        &lt;/Link&gt;
-        &lt;p&gt;{post.excerpt}&lt;/p&gt;
-      &lt;/li&gt;
-    ))}
-  &lt;/ul&gt;
-&lt;/div&gt;
-</code></pre>
-  
-  <p>
-    ) }
-  </p>
-  
-  <p>
-    export const pageQuery = graphql<code>query blogIndex {
-    allMdx {
-      edges {
-        node {
-          id
-          excerpt
-          frontmatter {
-            title
-          }
-          fields {
-            slug
-          }
-        }
-      }
-    }
-  }</code>
-  </p>
-  
-  <p>
-    export default BlogIndex ```
-  </p>
+  `)
+}
+```
