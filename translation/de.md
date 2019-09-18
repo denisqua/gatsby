@@ -1,107 +1,82 @@
 ---
-title: Building Themes
+title: Converting a Starter to a Theme
 ---
 
-The quickest way to get up and running with a workspace for building themes is to use the official [`gatsby-starter-theme-workspace`](https://github.com/gatsbyjs/gatsby/tree/master/themes/gatsby-starter-theme-workspace) starter.
+Gatsby themes are designed to be easy to create from an existing starter. Here we will walk you through the main steps of converting your starter to a theme.
 
-<EggheadEmbed lessonLink="https://egghead.io/lessons/gatsby-use-the-gatsby-theme-workspace-starter-to-begin-building-a-new-theme" lessonTitle="Use the Gatsby Theme Workspace Starter to Begin Building a New Theme" />
+## Prepare Your `package.json`
 
-To get started, run:
+To start converting your starter to a library, get started by updating your `package.json` to use the `gatsby-theme-*` naming convention. If your starter is `gatsby-starter-awesome-blog` you can update the name key to `gatsby-theme-awesome-blog` (and double check that it's available on [npm](https://npmjs.com)).
+
+Specify `gatsby`, `react`, and `react-dom` as `devDependencies` . It's preferable to add them as `peerDependencies` as well. This is needed so that end users can determine which versions they want and npm/yarn will be able to resolve them properly.
+
+In addition to updating your dependencies you will need to create an `index.js` file in the root of your project. This is needed so that when Gatsby attempts to resolve the theme it can do so since Node automatically looks for `index.js`.
+
+## Handling Path Resolution
+
+One of the key differences between themes and starters is that a theme is no longer executed where the Gatsby CLI is being run since it's now a dependency. This often results in errors sourcing content and finding templates since they will look in the end user's directory.
+
+In order to fix this, consider the following code that works as a starter:
+
+```js
+const createPosts = (createPage, createRedirect, edges) => {
+  edges.forEach(({ node }, i) => {
+    // ...
+
+    createPage({
+      path: pagePath,
+      component: path.resolve(`./src/templates/post.js`),
+      context: {
+        id: node.id,
+        prev,
+        next,
+      },
+    })
+  })
+}
+```
+
+Since `path.resolve` is being used we result in `src/templates/post.js` rather than `node_modules/gatsby-theme-awesome-blog/src/templates/post.js`. In order to fix this we can use `require.resolve` which will look relative to the theme so the correct template is found.
+
+```js
+const createPosts = (createPage, createRedirect, edges) => {
+  edges.forEach(({ node }, i) => {
+    // ...
+
+    createPage({
+      path: pagePath,
+      component: require.resolve(`./src/templates/post.js`), // highlight-line
+      context: {
+        id: node.id,
+        prev,
+        next,
+      },
+    })
+  })
+}
+```
+
+There may be other locations where you will need to update the path resolution like your `gatsby-config.js` as well.
+
+## Sourcing Pages
+
+If your theme provides pages for things like the blog post index and a homepage, you will need to source them. Gatsby will only look in the relative `src/pages` directory when `gatsby develop` is run. You will need to use the [`gatsby-plugin-page-creator`](/packages/gatsby-plugin-page-creator/).
 
 ```shell
-gatsby new my-theme gatsbyjs/gatsby-starter-theme-workspace
+npm install --save gatsby-plugin-page-creator
 ```
 
-This will generate a new project for you. The file tree will look like this:
+Then, tell the plugin to look in your theme's `src/pages` directory.
 
-```text
-.
-├── example
-│   ├── src
-│   │   └── pages
-│   │       └── index.js
-│   ├── gatsby-config.js
-│   ├── package.json
-│   └── README.md
-├── gatsby-theme-minimal
-│   ├── gatsby-config.js
-│   ├── index.js
-│   ├── package.json
-│   └── README.md
-├── .gitignore
-├── package.json
-├── README.md
-└── yarn.lock
-```
+```js:title=gatsby-config.js { resolve: `gatsby-plugin-page-creator`, options: { path: path.join(__dirname, `src`, `pages`), }, },
 
-Yarn workspaces are a great way to set up a project for theme development because they support housing multiple packages in a single parent directory and link them together.
-
-For Gatsby theme development, that means you can keep multiple themes and example sites together in a single project, and develop them locally.
-
-> 💡 If you prefer, using `yarn link` or `npm link` are viable alternatives. In general, Gatsby recommends the yarn workspaces approach for building themes, and that's what the starter and this guide will reflect.
-> 
-> 💡 The starter takes care of all of the configuration for developing a theme using yarn workspaces. If you're interested in more detail on this setup, check out [this blog post](/blog/2019-05-22-setting-up-yarn-workspaces-for-theme-development/).
-
-### `package.json`
-
-The `package.json` in the root of the new project is primarily responsible for setting up the yarn workspaces. In this case, there are two workspaces, `gatsby-theme-minimal` and `example`.
-
-    json:title=my-theme/package.json
-    {
-      "name": "gatsby-starter-theme-workspace",
-      "private": true,
-      "version": "0.0.1",
-      "main": "index.js",
-      "license": "MIT",
-      "scripts": {
-        "build": "yarn workspace example build"
-      },
-      // highlight-start
-      "workspaces": ["gatsby-theme-minimal", "example"]
-      // highlight-end
-    }
-
-### `/gatsby-theme-minimal`
-
-The `/gatsby-theme-minimal` directory is the starting point of the new theme you'll develop.
-
-Inside it you'll find:
-
-- `gatsby-config.js`: An empty gatsby-config that you can use as a starting point for building functionality into your theme.
-- `index.js`: Since themes also function as plugins, this is an empty file that Gatsby requires in order to use this theme as a plugin.
-- `package.json`: A file listing the dependencies that your theme will pull in when people install it. Gatsby should be a peer dependency.
-
-### `/example`
-
-The `/example` directory is an example Gatsby site that installs and uses the local theme, `gatsby-theme-minimal`.
-
-Inside it you'll find:
-
-- `gatsby-config.js`: Specifies which theme to use and any other one-off configuration a site might need.
-- `/src`: Contains source code such as custom pages or components that might live in a user's site.
-
-## Further resources
-
-### Gatsby Theme Authoring (Video course)
-
-Watch the new [Egghead course on Authoring Gatsby Themes](https://egghead.io/courses/gatsby-theme-authoring).
-
-### Building a Gatsby Theme (Tutorial)
-
-Check out the [tutorial for building a Gatsby theme](/tutorial/building-a-theme). The step-by-step tutorial goes into much more detail than this docs guide. It was written as a companion to the [Egghead theme authoring course](https://egghead.io/courses/gatsby-theme-authoring), so they can be used together!
-
-### Theme API reference
-
-Check out the [Theme API documentation](/docs/theme-api/).
-
-### Accessibility
-
-A Gatsby theme is a Gatsby site, therefore building with accessibility in mind is critical. Check out these [tips on making your sites (and themes!) accessible](/docs/making-your-site-accessible/).
-
-### Read through source code
-
-Check out how some existing themes are built:
-
-- The official [Gatsby blog theme](https://github.com/gatsbyjs/gatsby/tree/master/themes/gatsby-theme-blog)
-- The official [Gatsby notes theme](https://github.com/gatsbyjs/gatsby/tree/master/themes/gatsby-theme-notes)
-- The [Apollo themes](https://github.com/apollographql/gatsby-theme-apollo/tree/master/packages). (*You might also be interested in the [Apollo case study on themes](https://www.gatsbyjs.org/blog/2019-07-03-using-themes-for-distributed-docs/) on the blog.*)
+    <br />## Publishing to NPM
+    
+    In order to allow others to install your theme you will need to publish it to npm. If you haven't published to npm before, learn how [here](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry).
+    
+    From the root of your newly created theme run `npm publish`.
+    
+    Once you've published, you can install the theme in your starter.
+    
+    ```shell
+    npm install --save gatsby-theme-NAME
