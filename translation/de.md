@@ -1,212 +1,75 @@
 ---
-title: Writing Pages in MDX
+title: Using fragments
 ---
 
-After [installing](/docs/mdx/getting-started) `gatsby-plugin-mdx`, MDX files located in `src/pages` will turn into pages.
+Fragments allow you to reuse parts of GraphQL queries. It also allows you to split up complex queries into smaller, easier to understand components.
 
-Pages are rendered at a URL that is constructed from the filesystem path inside `src/pages`. An MDX file at `src/pages/awesome.mdx` will result in a page being rendered at `mysite.com/awesome`.
+## The building blocks of a fragment
 
-> `gatsby-plugin-mdx` looks for MDX files and automatically transpiles them so that Gatsby internals can render them.
-
-## Using frontmatter in MDX
-
-By default, `gatsby-plugin-mdx` supports [frontmatter](/docs/adding-markdown-pages/#frontmatter-for-metadata-in-markdown-files) so you can define things like titles and paths to use in your GraphQL queries. You can declare frontmatter at the beginning of your MDX document:
-
-```mdx
----
-title: Hello, world!
-path: /hello-world
-date: 2019-01-29
----
-
-# Hello, world!
-```
-
-Which can then be [queried with GraphQL](/docs/querying-with-graphql/):
+Here is an example fragment:
 
 ```graphql
-query {
-  allMdx {
-    edges {
-      node {
-        frontmatter {
-          title
-          path
-          date(formatString: "MMMM DD, YYYY")
-        }
-      }
-    }
-  }
+fragment FragmentName on TypeName {
+  field1
+  field2
 }
 ```
 
-> **Note:** To query `Mdx` content, it must be included in the node system using a source like the `gatsby-source-filesystem` plugin first. Instructions for sourcing content from somewhere like your `/src/pages` directory can be found on the [plugin's README](/packages/gatsby-source-filesystem/).
+A fragment consists of three components:
 
-Frontmatter is also available in `props.pageContext.frontmatter` and can be accessed in blocks of JSX in your MDX document:
+1. `FragmentName`: the name of the fragment that will be referenced later.
+2. `TypeName`: the [GraphQL type](https://graphql.org/graphql-js/object-types/) of the object the fragment will be used on. This is important because you can only query for fields that actually exist on a given object.
+3. The body of the query. You can define any fields with any level of nesting in here, the same that you would elsewhere in a GraphQL query
 
-```mdx
----
-title: Building with Gatsby
-author: Jay Gatsby
----
+## Creating and using a fragment
 
-<h1>{props.pageContext.frontmatter.title}</h1>
+A fragment can be created inside any GraphQL query, but it's good practice to create the query separately. More organization advice in the [Conceptual Guide](/docs/querying-with-graphql/#fragments).
 
-<span>{props.pageContext.frontmatter.author}</span>
+```jsx:title=src/components/IndexPost.jsx import React from "react" import { graphql } from "gatsby"
 
-(Blog post content, components, etc.)
-```
+export default ( props ) => { return (...) }
 
-## Importing JSX components and MDX documents
-
-Similarly to what you'd do in plain React, you can import and render JSX components directly in MDX files. You can also import other MDX documents.
-
-```mdx:title=src/pages/chart.mdx import { Chart } from "../components/chart" import FAQ from "../components/faq.mdx"
-
-# Here’s a chart
-
-The chart is rendered inside our MDX document.
-
-<Chart />
-
-<FAQ />
-
-    <br />The `&lt;Chart /&gt;` component coming from a `.js` file would be written like any
-    other React component, while the `&lt;FAQ /&gt;` component coming from an `.mdx`
-    file might look something like this:
-    
-    <!-- prettier-ignore -->
-    ```mdx:title=src/components/faq.mdx
-    ## Frequently Asked Questions
-    
-    ### Why Gatsby?
-    
-    Gatsby delivers faster, more secure sites and apps from a variety of data 
-    sources
-    
-    ### Where do I start?
-    
-    The documentation offers guides for all different skill levels, you can 
-    find more info at the Gatsby's [Quick Start page](https://www.gatsbyjs.org/docs/quick-start)
-    
-    &lt;!-- This default export overrides the default layout ensuring --&gt;
-    &lt;!--  that the FAQ component isn't wrapped by other elements --&gt;
-    export default ({ children }) =&gt; (
-      &lt;&gt;
-        {children}
-      &lt;/&gt;
-    )
-    
-
-> **Note**: the default export concept used in this code block is explained in more detail in the docs below on [defining layouts](#defining-a-layout)
-
-## Combining frontmatter and imports
-
-If you would like to include frontmatter metadata *and* import components, the frontmatter needs to appear at the top of the file and then imports can follow:
-
-```mdx
----
-title: Building with Gatsby
----
-
-import { Chart } from "../components/chart"
-
-Markdown and more content...
-```
-
-## Using JavaScript exports
-
-MDX supports `export` syntax as well, which enables specific use cases like providing data for queries and rendering or overriding the default layout on MDX documents. You don't need to export MDX documents to import them in other files.
-
-### Exporting page metadata
-
-You can provide additional data about a given document by exporting. `gatsby-plugin-mdx` will automatically add it to the GraphQL schema so you can use the exported data in your queries and in rendering.
-
-Data exported in MDX documents in this manner is also made available on the variable name you've assigned it.
-
-You can export variables, objects, or other data structures:
-
-<!-- prettier-ignore -->
-
-```mdx
-export const metadata = {
-  name: "World",
-  path: "/world",
-};
-
-# Hello, <span children={metadata.name} /> 
-
-The span above will read: "Hello, World".
-
-<!-- you can also use other variables or data structures -->
-export const names = ["Abdullah", "Adam", "Alice", "Aida"]
-
-<ul>{names.map(name => <li>{name}</li>)}</ul>
-```
-
-The fields `name` and `path` defined on `metadata` could now alternatively be accessed on MDX nodes in other areas of your Gatsby project by a GraphQL query like this (this query fetches all MDX nodes and the data exports associated with them):
-
-```graphql
-query MdxExports {
-  allMdx {
-    nodes {
-      exports {
-        metadata {
-          name
-          path
-        }
-      }
+export const query = graphql`fragment SiteInformation on Site {
+    siteMetadata {
+      title
+      siteDescription
     }
-  }
-}
-```
+  }`
 
-### Defining a layout
-
-If you have [provided a default layout](/packages/gatsby-plugin-mdx/?=mdx#default-layouts) in your `gatsby-config.js` through the `gatsby-plugin-mdx` plugin options, the exported component you define from this file will replace the default.
-
-<!-- prettier-ignore --> ```mdx:title=src/pages/layout-example.mdx import PurpleBorder from "../components/purple-border"
-
-# This will have a purple border
-
-export default PurpleBorder
-
-    <br />The `&lt;PurpleBorder /&gt;` component might look something like this, wrapping the MDX
-    document in a `&lt;div&gt;` with a 1px purple border:
+    <br />This defines a fragment named `SiteInformation`. Now it can be used from within the page's GraphQL query:
     
-    ```jsx:title=src/components/purple-border.js
+    ```jsx:title=src/pages/main.jsx
     import React from "react"
+    import { graphql } from "gatsby"
+    import IndexPost from "../components/IndexPost"
     
-    const PurpleBorder = ({ children }) =&gt; (
-      &lt;div style={{ border: "1px solid rebeccapurple" }}&gt;{children}&lt;/div&gt;
-    )
+    export default ({ data }) =&gt; {
+      return (
+        &lt;div&gt;
+          &lt;h1&gt;{data.site.siteMetadata.title}&lt;/h1&gt;
+          &lt;p&gt;{data.site.siteMetadata.siteDescription}&lt;/p&gt;
     
-    export default PurpleBorder
-    
-
-## GraphQL Queries
-
-You can fetch data to use in your MDX file by exporting a `pageQuery` in the same way you would for a `.js` page. The queried data is passed as a prop, and can be accessed inside any JSX block when writing in MDX:
-
-<!-- prettier-ignore -->
-
-```mdx
-import { graphql } from "gatsby"
-
-# My Awesome Page
-
-Here's a paragraph, followed by a paragraph with data!
-
-<p>{props.data.site.siteMetadata.description}</p>
-
-export const pageQuery = graphql`
-  query {
-    site {
-      siteMetadata {
-        description
-        title
-      }
+          {/*
+            Or you can pass all the data from the fragment
+            back to the component that defined it
+          */}
+          &lt;IndexPost siteInformation={data.site.siteMetadata} /&gt;
+        &lt;/div&gt;
+      )
     }
-  }
-`
-```
+    
+    export const query = graphql`
+      query {
+        site {
+          ...SiteInformation
+        }
+      }
+    `
+    
+
+When compiling your site, Gatsby preprocesses all GraphQL queries it finds. Therefore, any file that gets included in your project can define a snippet. However, only Pages can define GraphQL queries that actually return data. This is why we can define the fragment in the component file - it doesn't actually return any data directly.
+
+## Further reading
+
+- [Querying Data with GraphQL - Fragments](/docs/querying-with-graphql/#fragments)
+- [GraphQL Docs - Fragments](https://graphql.org/learn/queries/#fragments)
